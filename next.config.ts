@@ -5,14 +5,13 @@ const nextConfig: NextConfig = {
   /* config options here */
 };
 
-const sentryWebpackPluginOptions = {
+const sentryOptions = {
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: true,
-};
-
-export default withSentryConfig(nextConfig, sentryWebpackPluginOptions, {
   hideSourceMaps: true,
   disableLogger: true,
-});
+};
+
+export default withSentryConfig(nextConfig, sentryOptions);
