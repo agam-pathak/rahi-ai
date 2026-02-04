@@ -46,6 +46,18 @@ Recommended:
 
 Run the policies in `supabase/rls.sql` from the Supabase SQL editor.
 
+## Monitoring (Sentry)
+
+This project includes Sentry for error monitoring.
+
+Set these env vars in Vercel (Production + Preview if needed):
+- `SENTRY_DSN` (server)
+- `NEXT_PUBLIC_SENTRY_DSN` (client)
+- `SENTRY_ORG`
+- `SENTRY_PROJECT`
+- `SENTRY_AUTH_TOKEN` (for source map upload)
+- `SENTRY_ENVIRONMENT` (optional, e.g. `production`)
+
 ## Deployment (Vercel)
 
 1) Import the repo in Vercel.
