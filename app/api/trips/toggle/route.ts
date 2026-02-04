@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
 
 export async function POST(req: Request) {
@@ -12,6 +13,7 @@ export async function POST(req: Request) {
         { status: 401 }
       );
     }
+    const dataClient = supabaseAdmin ?? supabase;
 
     let body: any;
     try {
@@ -31,7 +33,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: trip, error: tripError } = await supabase
+    const { data: trip, error: tripError } = await dataClient
       .from("trips")
       .select("user_id")
       .eq("id", id)
@@ -51,7 +53,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { error } = await supabase
+    const { error } = await dataClient
       .from("trips")
       .update({ is_public })
       .eq("id", id);
