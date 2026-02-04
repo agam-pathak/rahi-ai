@@ -1,12 +1,22 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getClientId, rateLimit, rateLimitHeaders } from "@/lib/ai/guard";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
 };
 
 export async function POST(req: Request, { params }: RouteContext) {
+  const clientId = getClientId(req);
+  const rl = rateLimit(`trips:member:${clientId}`, { limit: 15, windowMs: 60_000 });
+  const rlHeaders = rateLimitHeaders(rl);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: rlHeaders }
+    );
+  }
   try {
     const { id } = await params;
     const { userId } = await req.json();

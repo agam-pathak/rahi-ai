@@ -1,8 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import { getClientId, rateLimit, rateLimitHeaders } from "@/lib/ai/guard";
 
 export async function POST(req: Request) {
+  const clientId = getClientId(req);
+  const rl = rateLimit(`trips:toggle:${clientId}`, { limit: 30, windowMs: 60_000 });
+  const rlHeaders = rateLimitHeaders(rl);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: rlHeaders }
+    );
+  }
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

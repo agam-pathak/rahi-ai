@@ -20,6 +20,38 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Environment Variables
+
+Create a `.env.local` from the example and fill the values:
+
+```bash
+cp .env.example .env.local
+```
+
+Required for build + auth:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SITE_URL`
+
+Required for features:
+- `GROQ_API_KEY` (AI)
+- `OPENWEATHER_API_KEY` (Weather)
+- `NEXT_PUBLIC_MAPBOX_TOKEN` (Maps)
+
+Recommended:
+- `SUPABASE_SERVICE_ROLE_KEY` (server-only admin fallback)
+- `PREMIUM_ENABLED` / `NEXT_PUBLIC_PREMIUM_ENABLED` (billing flags)
+
+## Supabase RLS
+
+Run the policies in `supabase/rls.sql` from the Supabase SQL editor.
+
+## Deployment (Vercel)
+
+1) Import the repo in Vercel.
+2) Set the same environment variables for **Production** (and **Preview** if needed).
+3) Deploy. The site URL should be set to the Vercel domain.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
