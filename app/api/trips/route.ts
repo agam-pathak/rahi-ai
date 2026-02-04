@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function GET() {
   const supabase = await createClient();
@@ -9,7 +10,8 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data, error } = await supabase
+  const dataClient = supabaseAdmin ?? supabase;
+  const { data, error } = await dataClient
     .from("trips")
     .select("*")
     .eq("user_id", user.id)

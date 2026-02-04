@@ -9,6 +9,7 @@ import {
   normalizeTripData,
 } from "@/lib/ai/trip-utils";
 import { getClientId, logAiRequest, rateLimit, rateLimitHeaders } from "@/lib/ai/guard";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
   const clientId = getClientId(req);
@@ -68,6 +69,7 @@ export async function POST(req: Request) {
   }
 
   const supabase = await createClient();
+  const dataClient = supabaseAdmin ?? supabase;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json(
@@ -168,7 +170,7 @@ export async function POST(req: Request) {
 
         const finalTrip = validation.data;
         const isShareCodeAvailable = async (code: string) => {
-          const { data, error } = await supabase
+          const { data, error } = await dataClient
             .from("trips")
             .select("id")
             .eq("share_code", code)
@@ -185,7 +187,7 @@ export async function POST(req: Request) {
         let dbError: any = null;
 
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          const { data, error } = await supabase
+          const { data, error } = await dataClient
             .from("trips")
             .insert({
               user_id: user.id,
@@ -215,8 +217,13 @@ export async function POST(req: Request) {
         }
 
         if (dbError) {
-          send({ type: "error", message: "Failed to save trip" });
-          console.warn(`[ai] stream fail ms=${Date.now() - startedAt} reason=db`);
+          send({
+            type: "error",
+            message: dbError?.message || "Failed to save trip",
+          });
+          console.warn(
+            `[ai] stream fail ms=${Date.now() - startedAt} reason=db code=${dbError?.code ?? "n/a"} msg=${dbError?.message ?? "unknown"}`
+          );
           streamController.close();
           return;
         }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -18,6 +19,7 @@ export async function POST(req: Request, { params }: RouteContext) {
     }
 
     const supabase = await createClient();
+    const dataClient = supabaseAdmin ?? supabase;
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -27,7 +29,7 @@ export async function POST(req: Request, { params }: RouteContext) {
       );
     }
 
-    const { data: trip, error: tripError } = await supabase
+    const { data: trip, error: tripError } = await dataClient
       .from("trips")
       .select("id, user_id")
       .eq("id", id)
@@ -47,7 +49,7 @@ export async function POST(req: Request, { params }: RouteContext) {
       );
     }
 
-    const { error } = await supabase
+    const { error } = await dataClient
       .from("trip_members")
       .insert({
         trip_id: trip.id,
