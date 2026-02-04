@@ -13,7 +13,7 @@ type PageProps = {
 
 export default async function TripView({ params }: PageProps) {
   const { code } = await params;
-  const headerList = headers();
+  const headerList = await headers();
   const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
   const proto = headerList.get("x-forwarded-proto") ?? "http";
   const baseUrl =
