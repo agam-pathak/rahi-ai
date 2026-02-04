@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import RahiVoiceUI, { speakWithHeart } from "@/components/RahiVoiceUI";
@@ -87,8 +87,8 @@ type VoiceSettings = {
 
 export default function PlannerPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
+  const [searchParams, setSearchParams] = useState(() => new URLSearchParams());
 
   // --- STATE ---
   const [loading, setLoading] = useState(false);
@@ -347,6 +347,13 @@ export default function PlannerPage() {
   const premiumEase = [0.16, 1, 0.3, 1] as const;
 
   // --- EFFECTS ---
+
+  // Next 16 requires useSearchParams() to be wrapped in Suspense. Since this page is fully client-side,
+  // we read query params from window after mount to keep builds/prerender stable.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setSearchParams(new URLSearchParams(window.location.search));
+  }, []);
 
   // 🔐 AUTH GUARD
   useEffect(() => {
