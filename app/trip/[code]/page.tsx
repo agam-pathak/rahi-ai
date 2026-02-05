@@ -1,11 +1,12 @@
 import { getTripWithMembers, getMyTripRole } from "@/lib/trips/members";
+import { createClient } from "@/lib/supabase/server";
 import AddMemberButton from "@/components/trips/AddMemberButton";
+import TripMembersPanel from "@/components/trips/TripMembersPanel";
 import TripItinerary from "@/components/trips/TripItinerary";
 import RahiBackground from "@/components/RahiBackground";
 import ThemeToggle from "@/components/ThemeToggle";
 import TripMap from "@/components/maps/TripMap";
 import { MapPin } from "lucide-react";
-import { headers } from "next/headers";
 
 type PageProps = {
   params: Promise<{ code: string }>;
@@ -13,20 +14,14 @@ type PageProps = {
 
 export default async function TripView({ params }: PageProps) {
   const { code } = await params;
-  const headerList = await headers();
-  const host = headerList.get("x-forwarded-host") ?? headerList.get("host");
-  const proto = headerList.get("x-forwarded-proto") ?? "http";
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (host ? `${proto}://${host}` : "http://localhost:3000");
+  const supabase = await createClient();
+  const { data: trip, error } = await supabase
+    .from("trips")
+    .select("id, destination, days, budget, interests, result, share_code, is_public, user_id")
+    .eq("share_code", code)
+    .single();
 
-  // 1️⃣ Fetch public trip via share_code
-  const res = await fetch(
-    `${baseUrl}/api/trips/${code}`,
-    { cache: "no-store" }
-  );
-
-  if (!res.ok) {
+  if (error || !trip) {
     return (
       <div className="min-h-screen bg-rahi-bg text-white flex items-center justify-center px-6">
         <div className="rahi-panel px-8 py-6 text-center">
@@ -36,11 +31,31 @@ export default async function TripView({ params }: PageProps) {
     );
   }
 
-  const trip = await res.json();
-
-  // 2️⃣ Fetch protected data using trip.id
-  const tripWithMembers = await getTripWithMembers(trip.id);
   const myRole = await getMyTripRole(trip.id);
+
+  if (trip.is_public === false && !myRole) {
+    return (
+      <div className="relative min-h-screen text-white px-6 py-10">
+        <RahiBackground />
+        <div className="relative z-10 max-w-2xl mx-auto text-center rahi-panel px-8 py-10">
+          <h1 className="text-2xl font-display font-bold text-white">Private Trip</h1>
+          <p className="text-sm text-gray-400 mt-2">
+            This itinerary is private. Sign in with the invited account or ask the owner for access.
+          </p>
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <a href="/login" className="rahi-btn-primary text-sm px-4 py-2">
+              Sign in
+            </a>
+            <a href="/" className="rahi-btn-secondary text-sm px-4 py-2">
+              Back home
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const tripWithMembers = myRole ? await getTripWithMembers(trip.id) : null;
 
   let itinerary: any = trip.result;
   if (typeof trip.result === "string") {
@@ -71,6 +86,8 @@ export default async function TripView({ params }: PageProps) {
         })
       )
     : [];
+
+  const tripMembers = tripWithMembers?.trip_members ?? [];
 
   return (
     <div className="relative min-h-screen text-white px-6 py-10">
@@ -122,6 +139,7 @@ export default async function TripView({ params }: PageProps) {
             destination={itinerary?.destination || trip.destination}
             stops={mapStops}
             mapboxToken={process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ""}
+            premium={myRole === "owner" || myRole === "editor"}
           />
           {mapStops.length === 0 && (
             <p className="text-xs text-gray-400 mt-3">
@@ -150,28 +168,22 @@ export default async function TripView({ params }: PageProps) {
               Trip Members
             </h3>
           </div>
-          {myRole === "owner" && (
-            <AddMemberButton tripId={trip.id} />
+          {myRole ? (
+            <>
+              {myRole === "owner" && (
+                <AddMemberButton tripId={trip.id} />
+              )}
+              <TripMembersPanel
+                tripId={trip.id}
+                members={tripMembers}
+                canManage={myRole === "owner"}
+              />
+            </>
+          ) : (
+            <p className="text-xs text-gray-500">
+              Sign in to view collaborators.
+            </p>
           )}
-
-          <div className="space-y-2 mt-3">
-            {tripWithMembers.trip_members.map((member: any) => (
-              <div
-                key={member.user_id}
-                className="flex items-center justify-between text-sm"
-              >
-                <span className="text-gray-300">
-                  {member.profiles?.name ||
-                    member.profiles?.email ||
-                    `${member.user_id.slice(0, 6)}…`}
-                </span>
-
-                <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs">
-                  {member.role}
-                </span>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </div>

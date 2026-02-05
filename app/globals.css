@@ -502,6 +502,40 @@ html[data-theme="dark"] .rahi-bg-noise {
   pointer-events: none;
 }
 
+.rahi-map-insights {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: grid;
+  gap: 6px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.rahi-map-insight {
+  min-width: 100px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  backdrop-filter: blur(6px);
+}
+
+.rahi-map-insight-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: rgba(148, 163, 184, 0.8);
+}
+
+.rahi-map-insight-value {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
 .rahi-map-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1469,6 +1503,72 @@ html[data-theme="dark"] .rahi-bg-noise {
   font-size: 11px;
   color: #64748b;
   margin-top: 4px;
+}
+
+.pdf-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.pdf-timeline-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px;
+  background: #ffffff;
+}
+
+.pdf-timeline-day {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #0f766e;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.pdf-timeline-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 4px;
+}
+
+.pdf-timeline-list {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pdf-timeline-pill {
+  font-size: 10px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.pdf-timeline-meta {
+  font-size: 11px;
+  color: #64748b;
+  text-align: right;
+  min-width: 90px;
+}
+
+.pdf-map {
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.pdf-map img {
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  display: block;
 }
 
 .pdf-weather-grid {

@@ -19,11 +19,17 @@ export async function POST(req: Request, { params }: RouteContext) {
   }
   try {
     const { id } = await params;
-    const { userId } = await req.json();
+    const { userId, role } = await req.json();
 
     if (!userId) {
       return NextResponse.json(
         { error: "userId required" },
+        { status: 400 }
+      );
+    }
+    if (role && role !== "viewer" && role !== "editor") {
+      return NextResponse.json(
+        { error: "Invalid role" },
         { status: 400 }
       );
     }
@@ -64,7 +70,7 @@ export async function POST(req: Request, { params }: RouteContext) {
       .insert({
         trip_id: trip.id,
         user_id: userId,
-        role: "viewer",
+        role: role === "editor" ? "editor" : "viewer",
       });
 
     if (error) {
@@ -77,6 +83,158 @@ export async function POST(req: Request, { params }: RouteContext) {
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Add member error:", err);
+    return NextResponse.json(
+      { error: "Invalid request" },
+      { status: 400 }
+    );
+  }
+}
+
+export async function PATCH(req: Request, { params }: RouteContext) {
+  const clientId = getClientId(req);
+  const rl = rateLimit(`trips:member:${clientId}`, { limit: 15, windowMs: 60_000 });
+  const rlHeaders = rateLimitHeaders(rl);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: rlHeaders }
+    );
+  }
+  try {
+    const { id } = await params;
+    const { userId, role } = await req.json();
+    if (!userId || !role) {
+      return NextResponse.json(
+        { error: "userId and role required" },
+        { status: 400 }
+      );
+    }
+    if (role !== "viewer" && role !== "editor") {
+      return NextResponse.json(
+        { error: "Invalid role" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = await createClient();
+    const dataClient = supabaseAdmin ?? supabase;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { data: trip, error: tripError } = await dataClient
+      .from("trips")
+      .select("id, user_id")
+      .eq("id", id)
+      .single();
+
+    if (tripError || !trip) {
+      return NextResponse.json(
+        { error: "Trip not found" },
+        { status: 404 }
+      );
+    }
+
+    if (trip.user_id !== user.id) {
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
+    const { error } = await dataClient
+      .from("trip_members")
+      .update({ role })
+      .eq("trip_id", id)
+      .eq("user_id", userId);
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Update member role error:", err);
+    return NextResponse.json(
+      { error: "Invalid request" },
+      { status: 400 }
+    );
+  }
+}
+
+export async function DELETE(req: Request, { params }: RouteContext) {
+  const clientId = getClientId(req);
+  const rl = rateLimit(`trips:member:${clientId}`, { limit: 15, windowMs: 60_000 });
+  const rlHeaders = rateLimitHeaders(rl);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Rate limit exceeded" },
+      { status: 429, headers: rlHeaders }
+    );
+  }
+  try {
+    const { id } = await params;
+    const { userId } = await req.json();
+    if (!userId) {
+      return NextResponse.json(
+        { error: "userId required" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = await createClient();
+    const dataClient = supabaseAdmin ?? supabase;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    const { data: trip, error: tripError } = await dataClient
+      .from("trips")
+      .select("id, user_id")
+      .eq("id", id)
+      .single();
+
+    if (tripError || !trip) {
+      return NextResponse.json(
+        { error: "Trip not found" },
+        { status: 404 }
+      );
+    }
+
+    if (trip.user_id !== user.id) {
+      return NextResponse.json(
+        { error: "Forbidden" },
+        { status: 403 }
+      );
+    }
+
+    const { error } = await dataClient
+      .from("trip_members")
+      .delete()
+      .eq("trip_id", id)
+      .eq("user_id", userId);
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Remove member error:", err);
     return NextResponse.json(
       { error: "Invalid request" },
       { status: 400 }

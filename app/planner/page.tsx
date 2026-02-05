@@ -136,10 +136,12 @@ export default function PlannerPage() {
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [fixingTrip, setFixingTrip] = useState(false);
   const [mapEnriching, setMapEnriching] = useState(false);
+  const [optimizingRoutes, setOptimizingRoutes] = useState(false);
   const [billingLoading, setBillingLoading] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistStatus, setWaitlistStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [pdfThemeOverride, setPdfThemeOverride] = useState<string | null>(null);
   const premiumEnabled = process.env.NEXT_PUBLIC_PREMIUM_ENABLED === "true";
   const geocodeCacheRef = useRef(new Map<string, [number, number]>());
   const geocodeRunRef = useRef<string | null>(null);
@@ -153,6 +155,32 @@ export default function PlannerPage() {
   const formatCurrency = (value: number) => {
     if (!Number.isFinite(value)) return "0";
     return value.toLocaleString("en-IN");
+  };
+
+  const getActivityCoord = (activity: Activity) => {
+    const coord = activity.location?.coordinates;
+    if (Array.isArray(coord) && coord.length === 2) {
+      return coord as [number, number];
+    }
+    const lat = Number(activity.location?.lat ?? NaN);
+    const lng = Number(activity.location?.lng ?? NaN);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
+      return [lng, lat] as [number, number];
+    }
+    return null;
+  };
+
+  const haversineKm = (from: [number, number], to: [number, number]) => {
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const [lng1, lat1] = from;
+    const [lng2, lat2] = to;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return 6371 * c;
   };
 
   const computeTotalBudget = (days: DayPlan[]) => {
@@ -211,13 +239,17 @@ export default function PlannerPage() {
       showToast("Share link not available yet.");
       return;
     }
-    if (trip.is_public === false) {
-      showToast("Trip is private. Make it public to share.");
+    if (trip.is_public === false && !pdfIsPremium) {
+      showToast("Private sharing is Premium-only. Upgrade to share securely.");
       return;
     }
     const url = `${window.location.origin}/trip/${trip.share_code}`;
     navigator.clipboard.writeText(`Check my trip plan made with Rahi.AI ✨\n${url}`);
-    showToast("Share link copied ✨");
+    showToast(
+      trip.is_public === false
+        ? "Private link copied. Only invited members can access."
+        : "Share link copied ✨"
+    );
   };
 
   const startUpgrade = async () => {
@@ -448,10 +480,10 @@ export default function PlannerPage() {
 
   const shareUrl = useMemo(() => {
     if (!trip?.share_code) return "";
-    if (trip.is_public === false) return "";
+    if (trip.is_public === false && !pdfIsPremium) return "";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     return origin ? `${origin}/trip/${trip.share_code}` : "";
-  }, [trip?.share_code, trip?.is_public]);
+  }, [trip?.share_code, trip?.is_public, pdfIsPremium]);
 
   const mapStops = useMemo(() => {
     if (!trip?.days || !Array.isArray(trip.days)) return [];
@@ -474,6 +506,14 @@ export default function PlannerPage() {
       })
     );
   }, [trip]);
+
+  const pdfMapUrl = useMemo(() => {
+    if (!mapboxToken) return "";
+    const coord = mapStops.find((stop) => stop.coordinates)?.coordinates;
+    if (!coord) return "";
+    const [lng, lat] = coord;
+    return `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/${lng},${lat},9,0/900x520?access_token=${mapboxToken}`;
+  }, [mapboxToken, mapStops]);
 
   useEffect(() => {
     if (!pdfIsPremium || !shareUrl) {
@@ -1079,6 +1119,76 @@ export default function PlannerPage() {
     showToast("Activity reordered.");
   };
 
+  const optimizeTripRoutes = async () => {
+    if (!trip || optimizingRoutes) return;
+    if (!premiumInsights?.canOptimize) {
+      showToast("Not enough location data to optimize routes.");
+      return;
+    }
+    setOptimizingRoutes(true);
+    try {
+      const updatedDays = trip.days.map((day) => {
+        const sorted = [...day.activities].sort(
+          (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+        );
+        const withCoords = sorted.filter((activity) => getActivityCoord(activity));
+        if (withCoords.length < 2) return day;
+        const withoutCoords = sorted.filter((activity) => !getActivityCoord(activity));
+        const remaining = [...withCoords];
+        const ordered: Activity[] = [];
+        ordered.push(remaining.shift()!);
+        while (remaining.length > 0) {
+          const last = ordered[ordered.length - 1];
+          const lastCoord = getActivityCoord(last);
+          if (!lastCoord) {
+            ordered.push(...remaining);
+            break;
+          }
+          let bestIndex = 0;
+          let bestDist = Infinity;
+          remaining.forEach((candidate, index) => {
+            const coord = getActivityCoord(candidate);
+            if (!coord) return;
+            const dist = haversineKm(lastCoord, coord);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestIndex = index;
+            }
+          });
+          const [next] = remaining.splice(bestIndex, 1);
+          ordered.push(next);
+        }
+        const merged = [...ordered, ...withoutCoords].map((activity, index) => ({
+          ...activity,
+          order_index: index,
+        }));
+        return { ...day, activities: merged };
+      });
+      const updatedTrip = applyBudgetToTrip({
+        ...trip,
+        days: updatedDays,
+      });
+      setTrip(updatedTrip);
+      updateHistoryEntry(updatedTrip);
+      await persistTripResult(updatedTrip);
+      showToast("Routes optimized for shorter travel.");
+    } catch {
+      showToast("Route optimization failed.");
+    } finally {
+      setOptimizingRoutes(false);
+    }
+  };
+
+  const swapExpensiveActivity = async () => {
+    if (!trip || replacingActivityId) return;
+    const expensive = premiumInsights?.expensiveActivity;
+    if (!expensive?.activity?.id) {
+      showToast("No pricey activity to swap yet.");
+      return;
+    }
+    await replaceActivity(expensive.day, expensive.activity.id);
+  };
+
   const wordToNumber = (value: string) => {
     const map: Record<string, number> = {
       one: 1,
@@ -1421,6 +1531,7 @@ export default function PlannerPage() {
     share_code: undefined,
     is_public: true,
   };
+  const isPrivateTrip = pdfTrip.is_public === false;
   const pdfInterests = interests || "Custom interests";
   const coverThemeLabels: Record<string, string> = {
     ocean: "Ocean Escape",
@@ -1429,7 +1540,7 @@ export default function PlannerPage() {
     forest: "Forest Retreat",
     city: "City Lights",
   };
-  const coverTheme = (() => {
+  const autoCoverTheme = (() => {
     const haystack = `${tripType} ${pdfInterests} ${pdfTrip.destination}`.toLowerCase();
     if (/(beach|island|ocean|sea|coast|lagoon)/.test(haystack)) return "ocean";
     if (/(mountain|trek|hike|adventure|hill|snow|alps)/.test(haystack)) return "alpine";
@@ -1437,7 +1548,10 @@ export default function PlannerPage() {
     if (/(forest|wildlife|jungle|eco|nature|national park)/.test(haystack)) return "forest";
     return "city";
   })();
-  const coverThemeLabel = coverThemeLabels[coverTheme] || "Signature Journey";
+  const autoCoverThemeLabel = coverThemeLabels[autoCoverTheme] || "Signature Journey";
+  const activeCoverTheme =
+    pdfIsPremium && pdfThemeOverride ? pdfThemeOverride : autoCoverTheme;
+  const coverThemeLabel = coverThemeLabels[activeCoverTheme] || "Signature Journey";
   const pdfHighlights = pdfTrip.days
     .flatMap((day) => day.activities)
     .slice(0, 5);
@@ -1554,6 +1668,58 @@ export default function PlannerPage() {
         dayCountWarnings,
         budgetOver,
       },
+    };
+  }, [trip, displayBudget, totalFromActivities]);
+
+  const premiumInsights = useMemo(() => {
+    if (!trip?.days || trip.days.length === 0) return null;
+    const dayStats = trip.days.map((day) => {
+      const cost = day.activities.reduce(
+        (sum, activity) => sum + (Number(activity.estimated_cost) || 0),
+        0
+      );
+      const duration = day.activities.reduce(
+        (sum, activity) => sum + (activity.duration_minutes || 0),
+        0
+      );
+      return {
+        day: day.day_number,
+        count: day.activities.length,
+        cost,
+        duration,
+      };
+    });
+    const flattened = trip.days.flatMap((day) =>
+      day.activities.map((activity) => ({
+        activity,
+        day: day.day_number,
+        cost: Number(activity.estimated_cost) || 0,
+      }))
+    );
+    const expensiveActivity = flattened.reduce<
+      { day: number; activity: Activity; cost: number } | null
+    >((max, current) => {
+      if (!max) return current;
+      return current.cost > max.cost ? current : max;
+    }, null);
+    const overloadedDays = dayStats.filter((stat) => stat.count > 6);
+    const underloadedDays = dayStats.filter((stat) => stat.count < 3);
+    const canOptimize = trip.days.some(
+      (day) => day.activities.filter((activity) => getActivityCoord(activity)).length >= 2
+    );
+    const safeBudget = Number.isFinite(displayBudget) ? displayBudget || 0 : 0;
+    const budgetDelta = safeBudget ? totalFromActivities - safeBudget : 0;
+    const avgPerDay = trip.days.length
+      ? Math.round((safeBudget || totalFromActivities) / trip.days.length)
+      : 0;
+    return {
+      dayStats,
+      expensiveActivity,
+      overloadedDays,
+      underloadedDays,
+      canOptimize,
+      budgetDelta,
+      avgPerDay,
     };
   }, [trip, displayBudget, totalFromActivities]);
 
@@ -2037,7 +2203,7 @@ export default function PlannerPage() {
                       onClick={shareTripLink}
                        className="rahi-btn-primary px-4 py-2 text-sm">
                        <Share2 className="w-4 h-4" />
-                        Share
+                        {trip.is_public === false ? "Private Share" : "Share"}
                       </button>
                       )}
                       {trip.id && (
@@ -2126,6 +2292,92 @@ export default function PlannerPage() {
                         </div>
                       )}
 
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2 text-amber-300 font-bold text-sm uppercase tracking-wide">
+                            <Sparkles className="w-4 h-4" /> Premium Intelligence
+                          </div>
+                          <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                            Insights
+                          </span>
+                        </div>
+                        {isPremium ? (
+                          <>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                              <div className="bg-black/20 p-3 rounded-lg">
+                                <p className="text-xs text-gray-400">Avg / Day</p>
+                                <p className="text-lg font-bold text-white">
+                                  ₹{formatCurrency(premiumInsights?.avgPerDay || 0)}
+                                </p>
+                              </div>
+                              <div className="bg-black/20 p-3 rounded-lg">
+                                <p className="text-xs text-gray-400">Budget Delta</p>
+                                <p
+                                  className={`text-lg font-bold ${
+                                    (premiumInsights?.budgetDelta || 0) > 0 ? "text-red-300" : "text-emerald-300"
+                                  }`}
+                                >
+                                  {(premiumInsights?.budgetDelta || 0) > 0 ? "+" : ""}
+                                  ₹{formatCurrency(Math.abs(premiumInsights?.budgetDelta || 0))}
+                                </p>
+                              </div>
+                              <div className="bg-black/20 p-3 rounded-lg">
+                                <p className="text-xs text-gray-400">Day Load</p>
+                                <p className="text-lg font-bold text-white">
+                                  {tripDaysCount || 0} days
+                                </p>
+                              </div>
+                              <div className="bg-black/20 p-3 rounded-lg">
+                                <p className="text-xs text-gray-400">Top Cost</p>
+                                <p className="text-lg font-bold text-white">
+                                  ₹{formatCurrency(premiumInsights?.expensiveActivity?.cost || 0)}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={optimizeTripRoutes}
+                                disabled={!premiumInsights?.canOptimize || optimizingRoutes}
+                                className="rahi-btn-secondary text-xs disabled:opacity-60"
+                              >
+                                {optimizingRoutes ? "Optimizing..." : "Optimize routes"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={swapExpensiveActivity}
+                                disabled={!premiumInsights?.expensiveActivity || Boolean(replacingActivityId)}
+                                className="rahi-btn-ghost text-xs disabled:opacity-60"
+                              >
+                                Swap pricey stop
+                              </button>
+                            </div>
+                            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-400">
+                              {premiumInsights?.overloadedDays?.map((day) => (
+                                <span key={`over-${day.day}`} className="px-2 py-1 rounded-full bg-red-500/10 text-red-200">
+                                  Day {day.day}: {day.count} stops
+                                </span>
+                              ))}
+                              {premiumInsights?.underloadedDays?.map((day) => (
+                                <span key={`under-${day.day}`} className="px-2 py-1 rounded-full bg-emerald-500/10 text-emerald-200">
+                                  Day {day.day}: only {day.count} stops
+                                </span>
+                              ))}
+                              {!premiumInsights?.overloadedDays?.length &&
+                                !premiumInsights?.underloadedDays?.length && (
+                                  <span className="px-2 py-1 rounded-full bg-white/5 text-emerald-200">
+                                    Days are nicely balanced.
+                                  </span>
+                                )}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-gray-400">
+                            Upgrade to Premium for route, budget, and pacing intelligence.
+                          </div>
+                        )}
+                      </div>
+
                       {(weather.length > 0 || weatherLoading || weatherError) && (
                         <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
                           <div className="flex items-center gap-2 mb-3 text-teal-400 font-bold text-sm uppercase tracking-wide">
@@ -2154,6 +2406,49 @@ export default function PlannerPage() {
                         </div>
                       )}
 
+                      {pdfIsPremium && (
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                              <Sparkles className="w-4 h-4" /> Premium PDF Studio
+                            </div>
+                            <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                              Theme
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setPdfThemeOverride(null)}
+                              className={`px-3 py-1 rounded-full text-[11px] border transition ${
+                                !pdfThemeOverride
+                                  ? "border-teal-400/60 bg-teal-500/20 text-teal-100"
+                                  : "border-white/10 text-gray-300 hover:border-teal-400/40"
+                              }`}
+                            >
+                              Auto • {autoCoverThemeLabel}
+                            </button>
+                            {Object.entries(coverThemeLabels).map(([key, label]) => (
+                              <button
+                                key={key}
+                                type="button"
+                                onClick={() => setPdfThemeOverride(key)}
+                                className={`px-3 py-1 rounded-full text-[11px] border transition ${
+                                  pdfThemeOverride === key
+                                    ? "border-teal-400/60 bg-teal-500/20 text-teal-100"
+                                    : "border-white/10 text-gray-300 hover:border-teal-400/40"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                          <p className="text-[11px] text-gray-400 mt-2">
+                            Applies to the PDF cover art, palette, and premium visuals.
+                          </p>
+                        </div>
+                      )}
+
                       <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
@@ -2170,7 +2465,12 @@ export default function PlannerPage() {
                             Open Map
                           </a>
                         </div>
-                        <TripMap destination={trip.destination} stops={mapStops} mapboxToken={mapboxToken} />
+                        <TripMap
+                          destination={trip.destination}
+                          stops={mapStops}
+                          mapboxToken={mapboxToken}
+                          premium={isPremium}
+                        />
                         {mapEnriching && (
                           <p className="text-xs text-gray-400 mt-2">
                             Enhancing map locations...
@@ -2218,7 +2518,7 @@ export default function PlannerPage() {
         className={`pdf-export ${pdfIsPremium ? "pdf-premium" : "pdf-free"} ${pdfDebug ? "pdf-debug" : ""}`}
         id="pdf-export"
       >
-        <div className={`pdf-page pdf-cover pdf-cover-theme-${coverTheme}`}>
+        <div className={`pdf-page pdf-cover pdf-cover-theme-${activeCoverTheme}`}>
           <div className="pdf-cover-art" aria-hidden="true">
             <div className="pdf-cover-art-orb" />
             <div className="pdf-cover-art-wave" />
@@ -2368,6 +2668,64 @@ export default function PlannerPage() {
           )}
         </div>
 
+        {pdfIsPremium && (
+          <div className="pdf-page">
+            <div className="pdf-section">
+              <div className="pdf-section-title pdf-section-title-lg">Journey Timeline</div>
+              {pdfTrip.days.length > 0 ? (
+                <div className="pdf-timeline">
+                  {pdfTrip.days.map((day) => {
+                    const dayCost = day.activities.reduce(
+                      (sum, activity) => sum + (Number(activity.estimated_cost) || 0),
+                      0
+                    );
+                    return (
+                      <div key={day.day_number} className="pdf-timeline-item">
+                        <div>
+                          <div className="pdf-timeline-day">Day {day.day_number}</div>
+                          <div className="pdf-timeline-title">
+                            {day.summary || "Signature experiences"}
+                          </div>
+                          <div className="pdf-timeline-list">
+                            {day.activities.slice(0, 3).map((activity) => (
+                              <span key={activity.id} className="pdf-timeline-pill">
+                                {activity.title}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="pdf-timeline-meta">
+                          <div>{day.activities.length} stops</div>
+                          <div>₹{formatCurrency(dayCost)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="pdf-empty">Generate a trip to see timeline.</div>
+              )}
+            </div>
+            <div className="pdf-section">
+              <div className="pdf-section-title">Route Snapshot</div>
+              {pdfMapUrl ? (
+                <div className="pdf-map">
+                  <img
+                    src={pdfMapUrl}
+                    alt="Trip map snapshot"
+                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              ) : (
+                <div className="pdf-empty">
+                  Map snapshot will appear once locations are available.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="pdf-page">
           <div className="pdf-section-title">Day-by-Day Plan</div>
           {pdfTrip.days.length > 0 ? (
@@ -2420,11 +2778,16 @@ export default function PlannerPage() {
               <div className="pdf-share-info">
                 <div className="pdf-card-label">Trip link</div>
                 <div className="pdf-share-url">
-                  {shareUrl || "Set trip to public to generate a share link."}
+                  {shareUrl ||
+                    (isPrivateTrip
+                      ? "Private link will appear once the trip is saved."
+                      : "Set trip to public to generate a share link.")}
                 </div>
                 <div className="pdf-share-note">
                   {pdfIsPremium
-                    ? "Scan the QR on mobile for instant access."
+                    ? isPrivateTrip
+                      ? "Private link: only invited members can open this trip."
+                      : "Scan the QR on mobile for instant access."
                     : "Upgrade for a scannable QR card."}
                 </div>
               </div>
@@ -2434,7 +2797,9 @@ export default function PlannerPage() {
                 ) : (
                   <div className="pdf-qr-placeholder">
                     {!shareUrl
-                      ? "Make trip public to enable QR."
+                      ? isPrivateTrip
+                        ? "Save the trip to enable a private QR."
+                        : "Make trip public to enable QR."
                       : pdfIsPremium
                         ? "Generating QR..."
                         : "QR available on Premium"}
@@ -2446,8 +2811,12 @@ export default function PlannerPage() {
 
           <div className="pdf-footer">
             {shareUrl
-              ? `Generated by Rahi.AI • ${shareUrl}`
-              : "Generated by Rahi.AI • Share link available when trip is public."}
+              ? `Generated by Rahi.AI • ${isPrivateTrip ? "Private link" : "Share link"} • ${shareUrl}`
+              : `Generated by Rahi.AI • ${
+                  isPrivateTrip
+                    ? "Private link available once trip is saved."
+                    : "Share link available when trip is public."
+                }`}
           </div>
         </div>
       </div>
@@ -2503,4 +2872,4 @@ export default function PlannerPage() {
   );
 }
 
-// all perfect
+// all perfect hnjnfjnhbtbhnrnuytnbhytg redyhgthbgyuj65t58jhynbv hyjkhgybhen    jnh yhrgyujebgydjm745bhubhi hngvgtrjnjifd jhbgyungt junhgb

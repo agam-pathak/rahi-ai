@@ -17,12 +17,13 @@ type Props = {
   stops: Stop[];
   destination: string;
   mapboxToken?: string;
+  premium?: boolean;
 };
 
 const DEFAULT_CENTER: [number, number] = [78.9629, 20.5937];
 const MAX_STOPS = 20;
 
-export default function TripMap({ stops, destination, mapboxToken = "" }: Props) {
+export default function TripMap({ stops, destination, mapboxToken = "", premium = false }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const mapboxRef = useRef<any>(null);
@@ -74,6 +75,42 @@ export default function TripMap({ stops, destination, mapboxToken = "" }: Props)
     if (!Number.isFinite(value || 0)) return null;
     return new Intl.NumberFormat("en-IN").format(value || 0);
   };
+
+  const haversineKm = (from: [number, number], to: [number, number]) => {
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const [lng1, lat1] = from;
+    const [lng2, lat2] = to;
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return 6371 * c;
+  };
+
+  const insightStats = useMemo(() => {
+    if (!premium) return null;
+    const stopCount = filteredStops.length;
+    const costTotal = filteredStops.reduce((sum, stop) => sum + (stop.cost || 0), 0);
+    const durationTotal = filteredStops.reduce((sum, stop) => sum + (stop.duration || 0), 0);
+    let distanceKm: number | null = null;
+    if (routeSummary?.distanceKm) {
+      distanceKm = routeSummary.distanceKm;
+    } else if (routeCoords.length >= 2) {
+      let total = 0;
+      for (let i = 1; i < routeCoords.length; i++) {
+        total += haversineKm(routeCoords[i - 1], routeCoords[i]);
+      }
+      distanceKm = Math.round(total * 10) / 10;
+    }
+    return {
+      stopCount,
+      costTotal,
+      durationTotal,
+      distanceKm,
+    };
+  }, [premium, filteredStops, routeSummary, routeCoords]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -461,6 +498,33 @@ export default function TripMap({ stops, destination, mapboxToken = "" }: Props)
               ETA {routeSummary.durationMin} min • {routeSummary.distanceKm} km
             </span>
           )}
+        </div>
+      )}
+
+      {premium && insightStats && (
+        <div className="rahi-map-insights">
+          <div className="rahi-map-insight">
+            <span className="rahi-map-insight-label">Stops</span>
+            <span className="rahi-map-insight-value">{insightStats.stopCount}</span>
+          </div>
+          <div className="rahi-map-insight">
+            <span className="rahi-map-insight-label">Est. Spend</span>
+            <span className="rahi-map-insight-value">
+              ₹{formatCurrency(insightStats.costTotal)}
+            </span>
+          </div>
+          <div className="rahi-map-insight">
+            <span className="rahi-map-insight-label">Duration</span>
+            <span className="rahi-map-insight-value">
+              {insightStats.durationTotal ? `${insightStats.durationTotal} min` : "—"}
+            </span>
+          </div>
+          <div className="rahi-map-insight">
+            <span className="rahi-map-insight-label">Distance</span>
+            <span className="rahi-map-insight-value">
+              {insightStats.distanceKm ? `${insightStats.distanceKm} km` : "—"}
+            </span>
+          </div>
         </div>
       )}
 

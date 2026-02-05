@@ -9,6 +9,7 @@ type Props = {
 
 export default function AddMemberModal({ tripId, onClose }: Props) {
   const [userId, setUserId] = useState("");
+  const [role, setRole] = useState<"viewer" | "editor">("viewer");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,7 +41,7 @@ export default function AddMemberModal({ tripId, onClose }: Props) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: resolvedUserId }),
+        body: JSON.stringify({ userId: resolvedUserId, role }),
       }
     );
 
@@ -69,6 +70,20 @@ export default function AddMemberModal({ tripId, onClose }: Props) {
           placeholder="Email or User ID"
           className="w-full rounded bg-zinc-800 px-3 py-2 text-sm outline-none"
         />
+
+        <div className="mt-3">
+          <label className="text-[11px] uppercase tracking-wide text-gray-400">
+            Role
+          </label>
+          <select
+            value={role}
+            onChange={(e) => setRole(e.target.value as "viewer" | "editor")}
+            className="mt-1 w-full rounded bg-zinc-800 px-3 py-2 text-sm outline-none"
+          >
+            <option value="viewer">Viewer (read only)</option>
+            <option value="editor">Editor (can edit itinerary)</option>
+          </select>
+        </div>
 
         {error && (
           <p className="mt-2 text-xs text-red-400">{error}</p>

@@ -14,6 +14,18 @@ on public.trips
 for select
 using (is_public = true);
 
+create policy "Trips are viewable by members"
+on public.trips
+for select
+using (
+  exists (
+    select 1
+    from public.trip_members tm
+    where tm.trip_id = trips.id
+      and tm.user_id = auth.uid()
+  )
+);
+
 create policy "Users can insert trips"
 on public.trips
 for insert
@@ -62,6 +74,26 @@ create policy "Owners can remove members"
 on public.trip_members
 for delete
 using (
+  exists (
+    select 1
+    from public.trips t
+    where t.id = trip_members.trip_id
+      and t.user_id = auth.uid()
+  )
+);
+
+create policy "Owners can update members"
+on public.trip_members
+for update
+using (
+  exists (
+    select 1
+    from public.trips t
+    where t.id = trip_members.trip_id
+      and t.user_id = auth.uid()
+  )
+)
+with check (
   exists (
     select 1
     from public.trips t

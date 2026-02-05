@@ -17,14 +17,17 @@ export async function GET(
   const { id } = await params;
 
   const supabase = await createClient();
-  const dataClient = supabaseAdmin ?? supabase;
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const { data, error } = await dataClient
+  let query = supabase
     .from("trips")
-    .select("id, destination, days, budget, interests, result, share_code, is_public")
-    .eq("share_code", id)
-    .eq("is_public", true)
-    .single();
+    .select("id, destination, days, budget, interests, result, share_code, is_public");
+
+  if (!user) {
+    query = query.eq("is_public", true);
+  }
+
+  const { data, error } = await query.eq("share_code", id).single();
 
   if (error || !data) {
     return NextResponse.json(null, { status: 404 });
