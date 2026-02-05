@@ -12,8 +12,9 @@ type Profile = {
   name?: string | null;
   email?: string | null;
   travel_style?: string | null;
-  budget_range?: string | null;
   bio?: string | null;
+  phone?: string | null;
+  avatar_url?: string | null;
   is_premium?: boolean | null;
   stripe_customer_id?: string | null;
   created_at?: string | null;
@@ -33,6 +34,8 @@ export default function ProfilePage() {
   const [credLoading, setCredLoading] = useState(false);
   const [credError, setCredError] = useState<string | null>(null);
   const [credSuccess, setCredSuccess] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -95,8 +98,9 @@ export default function ProfilePage() {
         body: JSON.stringify({
           name: profile.name || "",
           travel_style: profile.travel_style || "",
-          budget_range: profile.budget_range || "",
           bio: profile.bio || "",
+          phone: profile.phone || "",
+          avatar_url: profile.avatar_url || "",
         }),
       });
       if (!res.ok) {
@@ -110,6 +114,48 @@ export default function ProfilePage() {
       setError("Failed to save profile.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAvatarUpload = async (file?: File | null) => {
+    if (!file || !profile?.id) return;
+    setAvatarUploading(true);
+    setAvatarError(null);
+    try {
+      const ext = file.name.split(".").pop() || "jpg";
+      const filePath = `${profile.id}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, {
+          upsert: true,
+          contentType: file.type || "image/jpeg",
+        });
+      if (uploadError) {
+        setAvatarError(uploadError.message || "Upload failed.");
+        return;
+      }
+      const { data } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      const avatarUrl = data?.publicUrl;
+      if (!avatarUrl) {
+        setAvatarError("Failed to retrieve image URL.");
+        return;
+      }
+      const res = await fetch("/api/ai/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ avatar_url: avatarUrl }),
+      });
+      if (!res.ok) {
+        setAvatarError("Failed to save profile photo.");
+        return;
+      }
+      const updated = (await res.json()) as Profile;
+      setProfile(updated || { ...profile, avatar_url: avatarUrl });
+      setSuccess("Profile photo updated.");
+    } catch {
+      setAvatarError("Profile photo update failed.");
+    } finally {
+      setAvatarUploading(false);
     }
   };
 
@@ -215,8 +261,16 @@ export default function ProfilePage() {
 
         <div className="rahi-panel p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
           <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-2xl bg-teal-500/15 border border-teal-400/20 flex items-center justify-center text-xl font-bold">
-              {initials}
+            <div className="h-16 w-16 rounded-2xl bg-teal-500/15 border border-teal-400/20 flex items-center justify-center text-xl font-bold overflow-hidden">
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt="Profile"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                initials
+              )}
             </div>
             <div>
               <div className="text-xl font-display font-bold">
@@ -281,20 +335,6 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <label className="rahi-label">Budget range</label>
-              <input
-                className="rahi-input mt-2"
-                placeholder="₹5,000 - ₹15,000"
-                value={profile?.budget_range || ""}
-                onChange={(e) =>
-                  setProfile((prev) =>
-                    prev ? { ...prev, budget_range: e.target.value } : prev
-                  )
-                }
-              />
-            </div>
-
-            <div>
               <label className="rahi-label">Bio</label>
               <textarea
                 className="rahi-input mt-2 min-h-[120px]"
@@ -304,6 +344,39 @@ export default function ProfilePage() {
                   setProfile((prev) => (prev ? { ...prev, bio: e.target.value } : prev))
                 }
               />
+            </div>
+
+            <div>
+              <label className="rahi-label">Mobile number</label>
+              <input
+                className="rahi-input mt-2"
+                placeholder="+91 98765 43210"
+                value={profile?.phone || ""}
+                onChange={(e) =>
+                  setProfile((prev) => (prev ? { ...prev, phone: e.target.value } : prev))
+                }
+              />
+            </div>
+
+            <div>
+              <label className="rahi-label">Profile photo</label>
+              <div className="mt-2 flex items-center gap-3">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleAvatarUpload(e.target.files?.[0])}
+                  className="text-xs text-gray-300"
+                />
+                {avatarUploading && (
+                  <span className="text-xs text-teal-300">Uploading...</span>
+                )}
+              </div>
+              {avatarError && (
+                <p className="text-xs text-red-300 mt-2">{avatarError}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-2">
+                Uses the Supabase Storage bucket <span className="text-gray-300">avatars</span>.
+              </p>
             </div>
 
             <button
@@ -398,3 +471,5 @@ export default function ProfilePage() {
     </main>
   );
 }
+
+// Update all the changes at once 

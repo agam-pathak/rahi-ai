@@ -4,13 +4,17 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, Loader2, ArrowRight, Plane, CheckCircle2 } from "lucide-react";
+import { Mail, Lock, Loader2, ArrowRight, Plane, CheckCircle2, Phone, KeyRound } from "lucide-react";
 import RahiBackground from "@/components/RahiBackground";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [authMethod, setAuthMethod] = useState<"email" | "phone">("email");
   const [mode, setMode] = useState<"login" | "signup">("login");
   const premiumEase = [0.16, 1, 0.3, 1] as const;
   
@@ -25,20 +29,61 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const res =
-      mode === "login"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
+    if (authMethod === "email") {
+      const res =
+        mode === "login"
+          ? await supabase.auth.signInWithPassword({ email, password })
+          : await supabase.auth.signUp({ email, password });
 
+      setLoading(false);
+
+      if (res.error) {
+        setError(res.error.message);
+      } else {
+        setSuccess(true);
+        setTimeout(() => {
+          router.replace("/");
+        }, 2000);
+      }
+      return;
+    }
+
+    if (!phone.trim()) {
+      setError("Enter a valid mobile number with country code.");
+      setLoading(false);
+      return;
+    }
+
+    if (!otpSent) {
+      const res = await supabase.auth.signInWithOtp({
+        phone: phone.trim(),
+        options: { shouldCreateUser: true },
+      });
+      setLoading(false);
+      if (res.error) {
+        setError(res.error.message);
+      } else {
+        setOtpSent(true);
+      }
+      return;
+    }
+
+    if (!otp.trim()) {
+      setError("Enter the verification code.");
+      setLoading(false);
+      return;
+    }
+
+    const res = await supabase.auth.verifyOtp({
+      phone: phone.trim(),
+      token: otp.trim(),
+      type: "sms",
+    });
     setLoading(false);
-
     if (res.error) {
       setError(res.error.message);
     } else {
-      // SUCCESS! Trigger the animation sequence
       setSuccess(true);
-      
-      // Wait 2 seconds for the animation to play before redirecting
       setTimeout(() => {
         router.replace("/");
       }, 2000);
@@ -122,7 +167,42 @@ export default function LoginPage() {
                 </p>
               </div>
 
+              <div className="flex items-center justify-center gap-2 mb-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMethod("email");
+                    setError(null);
+                    setOtpSent(false);
+                    setOtp("");
+                  }}
+                  className={`px-3 py-2 rounded-full text-xs border transition ${
+                    authMethod === "email"
+                      ? "border-teal-400/60 bg-teal-500/20 text-teal-100"
+                      : "border-white/10 text-gray-300 hover:border-teal-400/40"
+                  }`}
+                >
+                  Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMethod("phone");
+                    setError(null);
+                  }}
+                  className={`px-3 py-2 rounded-full text-xs border transition ${
+                    authMethod === "phone"
+                      ? "border-teal-400/60 bg-teal-500/20 text-teal-100"
+                      : "border-white/10 text-gray-300 hover:border-teal-400/40"
+                  }`}
+                >
+                  Mobile OTP
+                </button>
+              </div>
+
               <form onSubmit={handleAuth} className="space-y-5">
+                {authMethod === "email" ? (
+                  <>
                 <div className="relative group">
                   <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-teal-400 transition-colors" />
                   <input
@@ -146,6 +226,43 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="relative group">
+                      <Phone className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-teal-400 transition-colors" />
+                      <input
+                        type="tel"
+                        required
+                        placeholder="+91 98765 43210"
+                        className="rahi-input pl-10 pr-4 py-3"
+                        value={phone}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          if (otpSent) {
+                            setOtpSent(false);
+                            setOtp("");
+                          }
+                        }}
+                      />
+                    </div>
+                    {otpSent && (
+                      <div className="relative group">
+                        <KeyRound className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-teal-400 transition-colors" />
+                        <input
+                          type="text"
+                          placeholder="Enter OTP"
+                          className="rahi-input pl-10 pr-4 py-3"
+                          value={otp}
+                          onChange={(e) => setOtp(e.target.value)}
+                        />
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-400">
+                      Use your full phone number with country code. We’ll send a one‑time code.
+                    </p>
+                  </>
+                )}
 
                 <AnimatePresence>
                   {error && (
@@ -170,7 +287,13 @@ export default function LoginPage() {
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <>
-                      {mode === "login" ? "Sign In" : "Create Account"}
+                      {authMethod === "email"
+                        ? mode === "login"
+                          ? "Sign In"
+                          : "Create Account"
+                        : otpSent
+                          ? "Verify Code"
+                          : "Send Code"}
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
@@ -201,18 +324,24 @@ export default function LoginPage() {
                 Google
               </button>
 
-              <p className="mt-8 text-center text-gray-400 text-sm">
-                {mode === "login" ? "New to Rahi?" : "Already a traveler?"}{" "}
-                <button
-                  onClick={() => {
-                    setMode(mode === "login" ? "signup" : "login");
-                    setError(null);
-                  }}
-                  className="text-teal-400 hover:text-teal-300 font-semibold transition-colors ml-1"
-                >
-                  {mode === "login" ? "Start here" : "Log in"}
-                </button>
-              </p>
+              {authMethod === "email" ? (
+                <p className="mt-8 text-center text-gray-400 text-sm">
+                  {mode === "login" ? "New to Rahi?" : "Already a traveler?"}{" "}
+                  <button
+                    onClick={() => {
+                      setMode(mode === "login" ? "signup" : "login");
+                      setError(null);
+                    }}
+                    className="text-teal-400 hover:text-teal-300 font-semibold transition-colors ml-1"
+                  >
+                    {mode === "login" ? "Start here" : "Log in"}
+                  </button>
+                </p>
+              ) : (
+                <p className="mt-8 text-center text-gray-400 text-sm">
+                  OTP login works for new and existing users.
+                </p>
+              )}
             </motion.div>
           )}
         </AnimatePresence>

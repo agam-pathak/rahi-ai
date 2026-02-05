@@ -784,6 +784,22 @@ html[data-theme="dark"] .rahi-bg-noise {
     color: #d9fef6;
   }
 
+  @media (max-width: 640px) {
+    .rahi-btn-primary {
+      padding: 0.75rem 1rem;
+      font-size: 0.9rem;
+    }
+
+    .rahi-btn-secondary {
+      padding: 0.6rem 0.9rem;
+      font-size: 0.85rem;
+    }
+
+    .rahi-btn-ghost {
+      padding: 0.55rem 0.75rem;
+    }
+  }
+
   .rahi-divider {
     border-color: rgba(148, 163, 184, 0.15);
   }

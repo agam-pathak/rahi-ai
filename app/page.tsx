@@ -223,6 +223,7 @@ export default function Home() {
           >
             <button onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-teal-400 transition-colors">Features</button>
             <button onClick={() => document.getElementById("community")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-teal-400 transition-colors">Community</button>
+            <a href="/profile" className="hover:text-teal-400 transition-colors">Profile</a>
             <button onClick={logout} className="text-red-400 hover:text-red-300 transition-colors">Logout</button>
             <ThemeToggle />
             <a href="/planner" className="rahi-btn-primary px-5 py-2.5 text-sm">
