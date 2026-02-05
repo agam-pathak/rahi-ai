@@ -50,7 +50,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="relative min-h-screen flex items-center justify-center overflow-hidden">
+    <main className="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
       <RahiBackground />
 
       <div className="relative z-10 w-full max-w-md">
@@ -62,7 +62,7 @@ export default function LoginPage() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 1.1 }}
               transition={{ duration: 0.6, ease: premiumEase }}
-              className="rahi-panel p-12 text-center"
+              className="rahi-panel p-8 sm:p-12 text-center"
             >
               <div className="flex justify-center mb-6">
                 <motion.div
@@ -99,7 +99,7 @@ export default function LoginPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.6, ease: premiumEase }}
-              className="rahi-panel p-8"
+              className="rahi-panel p-6 sm:p-8"
             >
               <div className="text-center mb-8">
                 <h1 className="text-4xl font-display font-bold text-white tracking-tight mb-2">

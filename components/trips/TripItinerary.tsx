@@ -121,7 +121,7 @@ export default function TripItinerary({
   return (
     <div className="space-y-6">
       {showSummary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="rounded-lg border border-white/10 bg-white/5 p-3">
             <p className="text-xs text-gray-400">Total Estimated</p>
             <p className="text-lg font-semibold text-white">
@@ -203,8 +203,8 @@ export default function TripItinerary({
                   No activities available for this day.
                 </div>
               ) : (
-                <div className="relative pl-10">
-                  <div className="absolute left-4 top-2 bottom-2 w-px bg-white/10" />
+                <div className="relative pl-6 sm:pl-10">
+                  <div className="absolute left-3 sm:left-4 top-2 bottom-2 w-px bg-white/10" />
                   <div className="space-y-4">
                     {buildSchedule(
                       [...day.activities].sort((a, b) => a.order_index - b.order_index)
@@ -220,7 +220,7 @@ export default function TripItinerary({
                           dragRef.current = null;
                         }}
                       >
-                        <div className="w-16 text-right text-[10px] text-gray-400">
+                        <div className="w-12 sm:w-16 text-right text-[10px] text-gray-400">
                           <div>{formatTime(start)}</div>
                           <div className="text-gray-600">{formatTime(end)}</div>
                         </div>

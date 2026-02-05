@@ -239,8 +239,8 @@ export default function ProfilePage() {
   return (
     <main className="relative min-h-screen bg-black text-white overflow-hidden">
       <RahiBackground />
-      <div className="relative z-10 max-w-6xl mx-auto px-6 py-10 space-y-6">
-        <div className="flex items-center justify-between">
+      <div className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-10 space-y-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="rahi-logo flex items-center gap-2 text-lg font-display font-bold text-white">
             <img
               src="/brand/rahi-mark.svg"
@@ -257,7 +257,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        <div className="rahi-panel p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
+        <div className="rahi-panel p-4 sm:p-6 flex flex-col md:flex-row items-start md:items-center gap-6">
           <div className="flex items-center gap-4">
             <div className="h-16 w-16 rounded-2xl bg-teal-500/15 border border-teal-400/20 flex items-center justify-center text-xl font-bold overflow-hidden">
               {profile?.avatar_url ? (
@@ -301,7 +301,7 @@ export default function ProfilePage() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rahi-panel p-6 space-y-4">
+          <div className="rahi-panel p-4 sm:p-6 space-y-4">
             <div className="flex items-center gap-2 text-teal-400 font-semibold text-sm uppercase tracking-wide">
               <UserCircle2 className="h-4 w-4" /> Profile details
             </div>
@@ -374,7 +374,7 @@ export default function ProfilePage() {
             </button>
           </div>
 
-          <div className="rahi-panel p-6 space-y-4">
+          <div className="rahi-panel p-4 sm:p-6 space-y-4">
             <div className="flex items-center gap-2 text-teal-400 font-semibold text-sm uppercase tracking-wide">
               <ShieldCheck className="h-4 w-4" /> Credentials & security
             </div>

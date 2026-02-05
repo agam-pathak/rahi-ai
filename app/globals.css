@@ -35,6 +35,7 @@ body {
   font-family: var(--font-sans), sans-serif;
   background-color: var(--rahi-bg);
   color: var(--rahi-text);
+  overflow-x: hidden;
 }
 
 .rahi-logo-badge {
@@ -211,6 +212,31 @@ html[data-theme="dark"] .rahi-bg-noise {
   background-size: 3px 3px;
   opacity: 0.06;
   mix-blend-mode: overlay;
+}
+
+@media (max-width: 640px) {
+  .rahi-bg-orb {
+    width: 180px;
+    height: 180px;
+    opacity: 0.35;
+  }
+
+  .rahi-bg-orb-2,
+  .rahi-bg-orb-3 {
+    display: none;
+  }
+
+  .rahi-bg-grid {
+    background-size: 60px 60px;
+    opacity: 0.05;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rahi-bg-aurora,
+  .rahi-bg-orb {
+    animation: none;
+  }
 }
 
 @keyframes rahiAurora {
@@ -452,6 +478,12 @@ html[data-theme="dark"] .rahi-bg-noise {
   border: 1px solid rgba(148, 163, 184, 0.2);
   background: rgba(2, 6, 23, 0.7);
   height: 320px;
+}
+
+@media (max-width: 640px) {
+  .rahi-map-shell {
+    height: 240px;
+  }
 }
 
 .rahi-map-shell.is-fullscreen {

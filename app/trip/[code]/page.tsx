@@ -23,7 +23,7 @@ export default async function TripView({ params }: PageProps) {
 
   if (error || !trip) {
     return (
-      <div className="min-h-screen bg-rahi-bg text-white flex items-center justify-center px-6">
+      <div className="min-h-screen bg-rahi-bg text-white flex items-center justify-center px-4 sm:px-6">
         <div className="rahi-panel px-8 py-6 text-center">
           Trip not found ❌
         </div>
@@ -35,7 +35,7 @@ export default async function TripView({ params }: PageProps) {
 
   if (trip.is_public === false && !myRole) {
     return (
-      <div className="relative min-h-screen text-white px-6 py-10">
+      <div className="relative min-h-screen text-white px-4 sm:px-6 py-8 sm:py-10">
         <RahiBackground />
         <div className="relative z-10 max-w-2xl mx-auto text-center rahi-panel px-8 py-10">
           <h1 className="text-2xl font-display font-bold text-white">Private Trip</h1>
@@ -90,10 +90,10 @@ export default async function TripView({ params }: PageProps) {
   const tripMembers = tripWithMembers?.trip_members ?? [];
 
   return (
-    <div className="relative min-h-screen text-white px-6 py-10">
+    <div className="relative min-h-screen text-white px-4 sm:px-6 py-8 sm:py-10">
       <RahiBackground />
       <div className="relative z-10 max-w-5xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div className="rahi-logo flex items-center gap-2 text-lg font-display font-bold text-white">
             <img
               src="/brand/rahi-mark.svg"
@@ -110,7 +110,7 @@ export default async function TripView({ params }: PageProps) {
           </div>
         </div>
         {/* Trip Header */}
-        <div className="rahi-panel p-6">
+        <div className="rahi-panel p-4 sm:p-6">
           <h1 className="text-3xl font-display font-bold text-white">
             {trip.destination}
           </h1>
@@ -119,7 +119,7 @@ export default async function TripView({ params }: PageProps) {
           </p>
         </div>
 
-        <div className="rahi-panel p-6">
+        <div className="rahi-panel p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
               <MapPin className="w-4 h-4" /> Trip Map
@@ -149,7 +149,7 @@ export default async function TripView({ params }: PageProps) {
         </div>
 
         {/* Itinerary */}
-        <div className="rahi-panel p-6">
+        <div className="rahi-panel p-4 sm:p-6">
           {itinerary?.days && Array.isArray(itinerary.days) ? (
             <TripItinerary trip={itinerary} />
           ) : (
@@ -162,7 +162,7 @@ export default async function TripView({ params }: PageProps) {
         </div>
 
         {/* Members Section */}
-        <div className="rahi-panel p-6">
+        <div className="rahi-panel p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-300">
               Trip Members

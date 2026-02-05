@@ -1737,8 +1737,8 @@ export default function PlannerPage() {
         </div>
       ) : (
         <>
-        <div className="relative z-10 p-6 md:p-12 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
+        <div className="relative z-10 p-4 sm:p-6 md:p-12 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
           <div className="rahi-logo flex items-center gap-2 text-lg font-display font-bold text-white">
             <img
               src="/brand/rahi-mark.svg"
@@ -1773,7 +1773,7 @@ export default function PlannerPage() {
               Rahi.AI System Active
             </span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-display font-black text-white tracking-tight mb-2">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black text-white tracking-tight mb-2">
             {MODE_CONFIG[plannerMode]?.title}
           </h1>
           <p className="text-gray-400 text-lg max-w-xl mx-auto">
@@ -1792,7 +1792,7 @@ export default function PlannerPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.6, ease: premiumEase }}
-            className={`max-w-4xl mx-auto ${glassPanel} flex flex-col h-[75vh] overflow-hidden`}
+            className={`w-full max-w-4xl mx-auto ${glassPanel} flex flex-col h-[70vh] md:h-[75vh] overflow-hidden`}
           >
             {/* Chat Header */}
             <div className="p-4 border-b border-white/10 bg-black/20 flex items-center justify-between">
@@ -1847,7 +1847,7 @@ export default function PlannerPage() {
             )}
 
             {/* Chat Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
               {chatMessages.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-4">
                   <div className="p-6 rounded-full bg-white/5 border border-white/10">
@@ -1923,7 +1923,7 @@ export default function PlannerPage() {
             </div>
 
             {/* Input Area */}
-            <div className="p-4 bg-black/40 border-t border-white/10 backdrop-blur-md">
+            <div className="p-3 sm:p-4 bg-black/40 border-t border-white/10 backdrop-blur-md">
               <div className="flex gap-2">
                 <input
                   className="flex-1 rahi-input"
@@ -1943,14 +1943,14 @@ export default function PlannerPage() {
           </motion.div>
         ) : (
           /* ---------------- PLANNER / BUDGET MODE UI ---------------- */
-          <div className="grid lg:grid-cols-12 gap-10">
+          <div className="grid lg:grid-cols-12 gap-6 md:gap-10">
             
             {/* LEFT COLUMN: INPUT FORM */}
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, ease: premiumEase }}
-              className={`lg:col-span-5 ${glassPanel} p-8 h-fit`}
+              className={`lg:col-span-5 ${glassPanel} p-6 md:p-8 h-fit`}
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-teal-500/20 rounded-lg">
@@ -1971,7 +1971,7 @@ export default function PlannerPage() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className={inputContainer}>
                      <label className={labelStyle}>Budget</label>
                      <IndianRupee className={inputIcon} />
@@ -2127,7 +2127,7 @@ export default function PlannerPage() {
                initial={{ opacity: 0, x: 20 }}
                animate={{ opacity: 1, x: 0 }}
                transition={{ duration: 0.6, ease: premiumEase }}
-               className={`lg:col-span-7 ${glassPanel} p-8 min-h-[600px] flex flex-col relative`}
+               className={`lg:col-span-7 ${glassPanel} p-6 md:p-8 min-h-[520px] md:min-h-[600px] flex flex-col relative`}
             >
               {loading && !streaming && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-20 rounded-2xl">
@@ -2872,4 +2872,4 @@ export default function PlannerPage() {
   );
 }
 
-// all perfect hnjnfjnhbtbhnrnuytnbhytg redyhgthbgyuj65t58jhynbv hyjkhgybhen    jnh yhrgyujebgydjm745bhubhi hngvgtrjnjifd jhbgyungt junhgb
+// all perfect 

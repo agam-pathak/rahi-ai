@@ -193,7 +193,7 @@ export default function Home() {
 
       {/* 2. GLASS NAVBAR */}
       <nav className="fixed top-0 w-full z-50 border-b border-rahi-border bg-rahi-surface backdrop-blur-xl transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 md:h-20 flex items-center justify-between">
           <motion.div 
              initial={{ opacity: 0, x: -20 }}
              animate={{ opacity: 1, x: 0 }}
@@ -216,6 +216,16 @@ export default function Home() {
             </svg>
           </motion.div>
 
+          <div className="flex md:hidden items-center gap-2">
+            <ThemeToggle />
+            <a href="/profile" className="rahi-btn-ghost text-[11px] px-3 py-2">
+              Profile
+            </a>
+            <a href="/planner" className="rahi-btn-primary px-3 py-2 text-xs">
+              Plan
+            </a>
+          </div>
+
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -234,7 +244,7 @@ export default function Home() {
       </nav>
 
       {/* 3. HERO SECTION (Restored the specific styling you liked) */}
-      <section className="relative z-20 flex flex-col items-center justify-center min-h-screen px-4 text-center pt-20">
+      <section className="relative z-20 flex flex-col items-center justify-center min-h-screen px-4 text-center pt-24 md:pt-20">
         <div className="rahi-hero-watermark" aria-hidden="true">
           <span>RAHI.AI</span>
         </div>
@@ -264,7 +274,7 @@ export default function Home() {
           {/* Massive Headline */}
           <motion.h1 
             variants={itemVariants}
-            className="text-6xl md:text-8xl font-display font-black tracking-tight leading-tight"
+            className="text-4xl sm:text-6xl md:text-8xl font-display font-black tracking-tight leading-tight"
           >
             Travel Smart with <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-300 drop-shadow-[0_0_35px_rgba(45,212,191,0.4)]">
