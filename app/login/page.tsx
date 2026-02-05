@@ -2,26 +2,17 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, Loader2, ArrowRight, Plane, CheckCircle2, Phone, KeyRound } from "lucide-react";
+import { Mail, Loader2, ArrowRight } from "lucide-react";
 import RahiBackground from "@/components/RahiBackground";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [authMethod, setAuthMethod] = useState<"email" | "phone">("email");
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [linkSent, setLinkSent] = useState(false);
   const premiumEase = [0.16, 1, 0.3, 1] as const;
   
   // Loading state for API call
   const [loading, setLoading] = useState(false);
-  // Success state for the "Takeoff" animation
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -29,64 +20,18 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    if (authMethod === "email") {
-      const res =
-        mode === "login"
-          ? await supabase.auth.signInWithPassword({ email, password })
-          : await supabase.auth.signUp({ email, password });
-
-      setLoading(false);
-
-      if (res.error) {
-        setError(res.error.message);
-      } else {
-        setSuccess(true);
-        setTimeout(() => {
-          router.replace("/");
-        }, 2000);
-      }
-      return;
-    }
-
-    if (!phone.trim()) {
-      setError("Enter a valid mobile number with country code.");
-      setLoading(false);
-      return;
-    }
-
-    if (!otpSent) {
-      const res = await supabase.auth.signInWithOtp({
-        phone: phone.trim(),
-        options: { shouldCreateUser: true },
-      });
-      setLoading(false);
-      if (res.error) {
-        setError(res.error.message);
-      } else {
-        setOtpSent(true);
-      }
-      return;
-    }
-
-    if (!otp.trim()) {
-      setError("Enter the verification code.");
-      setLoading(false);
-      return;
-    }
-
-    const res = await supabase.auth.verifyOtp({
-      phone: phone.trim(),
-      token: otp.trim(),
-      type: "sms",
+    const res = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/`,
+      },
     });
     setLoading(false);
     if (res.error) {
       setError(res.error.message);
     } else {
-      setSuccess(true);
-      setTimeout(() => {
-        router.replace("/");
-      }, 2000);
+      setLinkSent(true);
     }
   };
 
@@ -105,50 +50,7 @@ export default function LoginPage() {
 
       <div className="relative z-10 w-full max-w-md">
         <AnimatePresence mode="wait">
-          
-          {/* STATE 1: SUCCESS ANIMATION */}
-          {success ? (
-            <motion.div
-              key="success"
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 1.1 }}
-              transition={{ duration: 0.6, ease: premiumEase }}
-              className="rahi-panel p-12 text-center"
-            >
-              <div className="flex justify-center mb-6">
-                {/* The Plane Takeoff Animation */}
-                <motion.div
-                  initial={{ x: -50, y: 50, opacity: 0 }}
-                  animate={{ x: 50, y: -50, opacity: 1 }}
-                  transition={{ duration: 1.5, ease: "easeInOut" }}
-                >
-                  <Plane className="h-20 w-20 text-teal-400" />
-                </motion.div>
-              </div>
-              
-              <motion.h2 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4, duration: 0.6, ease: premiumEase }}
-                className="text-3xl font-display font-bold text-white mb-2"
-              >
-                Welcome Aboard!
-              </motion.h2>
-              
-              <motion.p 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.6, duration: 0.6, ease: premiumEase }}
-                className="text-gray-300"
-              >
-                Preparing your itinerary...
-              </motion.p>
-            </motion.div>
-          ) : (
-
-          /* STATE 2: LOGIN FORM */
-            <motion.div 
+          <motion.div 
               key="form"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -161,48 +63,11 @@ export default function LoginPage() {
                   Rahi.AI
                 </h1>
                 <p className="text-gray-300 text-sm">
-                  {mode === "login" 
-                    ? "Welcome back to your journey." 
-                    : "Start your adventure today."}
+                  Sign in with a secure email link.
                 </p>
               </div>
 
-              <div className="flex items-center justify-center gap-2 mb-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMethod("email");
-                    setError(null);
-                    setOtpSent(false);
-                    setOtp("");
-                  }}
-                  className={`px-3 py-2 rounded-full text-xs border transition ${
-                    authMethod === "email"
-                      ? "border-teal-400/60 bg-teal-500/20 text-teal-100"
-                      : "border-white/10 text-gray-300 hover:border-teal-400/40"
-                  }`}
-                >
-                  Email
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMethod("phone");
-                    setError(null);
-                  }}
-                  className={`px-3 py-2 rounded-full text-xs border transition ${
-                    authMethod === "phone"
-                      ? "border-teal-400/60 bg-teal-500/20 text-teal-100"
-                      : "border-white/10 text-gray-300 hover:border-teal-400/40"
-                  }`}
-                >
-                  Mobile OTP
-                </button>
-              </div>
-
               <form onSubmit={handleAuth} className="space-y-5">
-                {authMethod === "email" ? (
-                  <>
                 <div className="relative group">
                   <Mail className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-teal-400 transition-colors" />
                   <input
@@ -214,55 +79,6 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
-
-                <div className="relative group">
-                  <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-teal-400 transition-colors" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="Password"
-                    className="rahi-input pl-10 pr-4 py-3"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="relative group">
-                      <Phone className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-teal-400 transition-colors" />
-                      <input
-                        type="tel"
-                        required
-                        placeholder="+91 98765 43210"
-                        className="rahi-input pl-10 pr-4 py-3"
-                        value={phone}
-                        onChange={(e) => {
-                          setPhone(e.target.value);
-                          if (otpSent) {
-                            setOtpSent(false);
-                            setOtp("");
-                          }
-                        }}
-                      />
-                    </div>
-                    {otpSent && (
-                      <div className="relative group">
-                        <KeyRound className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-teal-400 transition-colors" />
-                        <input
-                          type="text"
-                          placeholder="Enter OTP"
-                          className="rahi-input pl-10 pr-4 py-3"
-                          value={otp}
-                          onChange={(e) => setOtp(e.target.value)}
-                        />
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-400">
-                      Use your full phone number with country code. We’ll send a one‑time code.
-                    </p>
-                  </>
-                )}
 
                 <AnimatePresence>
                   {error && (
@@ -287,18 +103,18 @@ export default function LoginPage() {
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <>
-                      {authMethod === "email"
-                        ? mode === "login"
-                          ? "Sign In"
-                          : "Create Account"
-                        : otpSent
-                          ? "Verify Code"
-                          : "Send Code"}
+                  {linkSent ? "Resend link" : "Send magic link"}
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
                 </button>
               </form>
+              
+              {linkSent && (
+                <div className="mt-4 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 text-center">
+                  Check your inbox for a secure sign‑in link.
+                </div>
+              )}
 
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
@@ -324,26 +140,10 @@ export default function LoginPage() {
                 Google
               </button>
 
-              {authMethod === "email" ? (
-                <p className="mt-8 text-center text-gray-400 text-sm">
-                  {mode === "login" ? "New to Rahi?" : "Already a traveler?"}{" "}
-                  <button
-                    onClick={() => {
-                      setMode(mode === "login" ? "signup" : "login");
-                      setError(null);
-                    }}
-                    className="text-teal-400 hover:text-teal-300 font-semibold transition-colors ml-1"
-                  >
-                    {mode === "login" ? "Start here" : "Log in"}
-                  </button>
-                </p>
-              ) : (
-                <p className="mt-8 text-center text-gray-400 text-sm">
-                  OTP login works for new and existing users.
-                </p>
-              )}
+              <p className="mt-8 text-center text-gray-400 text-sm">
+                Magic link works for new and existing users.
+              </p>
             </motion.div>
-          )}
         </AnimatePresence>
       </div>
     </main>

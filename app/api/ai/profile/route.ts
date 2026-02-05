@@ -7,7 +7,6 @@ const ProfileUpdateSchema = z.object({
   name: z.string().max(100).optional(),
   travel_style: z.string().max(100).optional(),
   bio: z.string().max(500).optional(),
-  phone: z.string().max(30).optional(),
   avatar_url: z.string().max(500).optional(),
 });
 
@@ -105,7 +104,6 @@ export async function POST(req: Request) {
     update.travel_style = parsed.data.travel_style;
   }
   if (parsed.data.bio !== undefined) update.bio = parsed.data.bio;
-  if (parsed.data.phone !== undefined) update.phone = parsed.data.phone;
   if (parsed.data.avatar_url !== undefined) update.avatar_url = parsed.data.avatar_url;
 
   const { data, error } = await supabase

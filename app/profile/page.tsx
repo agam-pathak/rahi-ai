@@ -13,7 +13,6 @@ type Profile = {
   email?: string | null;
   travel_style?: string | null;
   bio?: string | null;
-  phone?: string | null;
   avatar_url?: string | null;
   is_premium?: boolean | null;
   stripe_customer_id?: string | null;
@@ -99,7 +98,6 @@ export default function ProfilePage() {
           name: profile.name || "",
           travel_style: profile.travel_style || "",
           bio: profile.bio || "",
-          phone: profile.phone || "",
           avatar_url: profile.avatar_url || "",
         }),
       });
@@ -347,18 +345,6 @@ export default function ProfilePage() {
             </div>
 
             <div>
-              <label className="rahi-label">Mobile number</label>
-              <input
-                className="rahi-input mt-2"
-                placeholder="+91 98765 43210"
-                value={profile?.phone || ""}
-                onChange={(e) =>
-                  setProfile((prev) => (prev ? { ...prev, phone: e.target.value } : prev))
-                }
-              />
-            </div>
-
-            <div>
               <label className="rahi-label">Profile photo</label>
               <div className="mt-2 flex items-center gap-3">
                 <input
@@ -471,5 +457,3 @@ export default function ProfilePage() {
     </main>
   );
 }
-
-// Update all the changes at once 
