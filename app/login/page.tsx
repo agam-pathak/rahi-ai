@@ -2,17 +2,22 @@
 
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Loader2, ArrowRight } from "lucide-react";
+import { Mail, Lock, Loader2, ArrowRight, Plane, CheckCircle2 } from "lucide-react";
 import RahiBackground from "@/components/RahiBackground";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [linkSent, setLinkSent] = useState(false);
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const premiumEase = [0.16, 1, 0.3, 1] as const;
   
   // Loading state for API call
   const [loading, setLoading] = useState(false);
+  // Success state for the "Takeoff" animation
+  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -20,18 +25,18 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const res = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/`,
-      },
-    });
+    const res =
+      mode === "login"
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({ email, password });
     setLoading(false);
     if (res.error) {
       setError(res.error.message);
     } else {
-      setLinkSent(true);
+      setSuccess(true);
+      setTimeout(() => {
+        router.replace("/");
+      }, 2000);
     }
   };
 
@@ -50,7 +55,45 @@ export default function LoginPage() {
 
       <div className="relative z-10 w-full max-w-md">
         <AnimatePresence mode="wait">
-          <motion.div 
+          {success ? (
+            <motion.div
+              key="success"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.1 }}
+              transition={{ duration: 0.6, ease: premiumEase }}
+              className="rahi-panel p-12 text-center"
+            >
+              <div className="flex justify-center mb-6">
+                <motion.div
+                  initial={{ x: -50, y: 50, opacity: 0 }}
+                  animate={{ x: 50, y: -50, opacity: 1 }}
+                  transition={{ duration: 1.5, ease: "easeInOut" }}
+                >
+                  <Plane className="h-20 w-20 text-teal-400" />
+                </motion.div>
+              </div>
+              
+              <motion.h2 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.6, ease: premiumEase }}
+                className="text-3xl font-display font-bold text-white mb-2"
+              >
+                Welcome Aboard!
+              </motion.h2>
+              
+              <motion.p 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6, duration: 0.6, ease: premiumEase }}
+                className="text-gray-300"
+              >
+                Preparing your itinerary...
+              </motion.p>
+            </motion.div>
+          ) : (
+            <motion.div 
               key="form"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -63,7 +106,9 @@ export default function LoginPage() {
                   Rahi.AI
                 </h1>
                 <p className="text-gray-300 text-sm">
-                  Sign in with a secure email link.
+                  {mode === "login" 
+                    ? "Welcome back to your journey." 
+                    : "Start your adventure today."}
                 </p>
               </div>
 
@@ -77,6 +122,18 @@ export default function LoginPage() {
                     className="rahi-input pl-10 pr-4 py-3"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+
+                <div className="relative group">
+                  <Lock className="absolute left-3 top-3.5 h-5 w-5 text-gray-400 group-focus-within:text-teal-400 transition-colors" />
+                  <input
+                    type="password"
+                    required
+                    placeholder="Password"
+                    className="rahi-input pl-10 pr-4 py-3"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
 
@@ -103,18 +160,12 @@ export default function LoginPage() {
                     <Loader2 className="h-5 w-5 animate-spin" />
                   ) : (
                     <>
-                  {linkSent ? "Resend link" : "Send magic link"}
+                      {mode === "login" ? "Sign In" : "Create Account"}
                       <ArrowRight className="h-4 w-4" />
                     </>
                   )}
                 </button>
               </form>
-              
-              {linkSent && (
-                <div className="mt-4 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 text-center">
-                  Check your inbox for a secure sign‑in link.
-                </div>
-              )}
 
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
@@ -141,9 +192,19 @@ export default function LoginPage() {
               </button>
 
               <p className="mt-8 text-center text-gray-400 text-sm">
-                Magic link works for new and existing users.
+                {mode === "login" ? "New to Rahi?" : "Already a traveler?"}{" "}
+                <button
+                  onClick={() => {
+                    setMode(mode === "login" ? "signup" : "login");
+                    setError(null);
+                  }}
+                  className="text-teal-400 hover:text-teal-300 font-semibold transition-colors ml-1"
+                >
+                  {mode === "login" ? "Start here" : "Log in"}
+                </button>
               </p>
             </motion.div>
+          )}
         </AnimatePresence>
       </div>
     </main>
