@@ -185,9 +185,11 @@ export default async function TripView({ params }: PageProps) {
   const varietyScore = ACTIVITY_TYPE_COUNT
     ? Math.round((activityTypes.size / ACTIVITY_TYPE_COUNT) * 100)
     : 0;
-  const busiestDay =
-    dayStats.reduce((max, stat) => (max && max.duration > stat.duration ? max : stat), null) ||
-    null;
+  const busiestDay = dayStats.length
+    ? dayStats.reduce((max, stat) =>
+        max.duration > stat.duration ? max : stat
+      )
+    : null;
   const signatureStory =
     itinerary?.meta?.signature_story || buildAutoStory(itinerary, itineraryDays.length);
   const checklistState = itinerary?.meta?.prep_checklist ?? {};
