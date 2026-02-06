@@ -157,7 +157,7 @@ export default async function TripView({ params }: PageProps) {
 
   const itineraryDays = Array.isArray(itinerary?.days) ? itinerary.days : [];
   const activityTypes = new Set<string>();
-  const dayStats = itineraryDays.map((day: any) => {
+  const dayStats: { day: number; count: number; duration: number; distance: number }[] = itineraryDays.map((day: any) => {
     let distance = 0;
     let lastCoord: [number, number] | null = null;
     const duration = (day.activities || []).reduce(
