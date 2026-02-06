@@ -646,3 +646,4 @@ function FeatureCard({ icon, title, desc, color, onClick }: any) {
     </motion.div>
   );
 }
+

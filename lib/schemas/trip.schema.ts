@@ -63,8 +63,11 @@ export const DaySchema = z.object({
 
 export const TripMetaSchema = z.object({
   total_estimated_budget: z.number().nonnegative(),
-  pace: PaceLevel,
-  primary_vibes: z.array(VibeTag),
+  pace: PaceLevel.optional(),
+  primary_vibes: z.array(VibeTag).optional(),
+  packing_suggestions: z.array(z.string()).optional(),
+  prep_checklist: z.record(z.boolean()).optional(),
+  signature_story: z.string().optional(),
 });
 
 /* ---------- Canonical Trip ---------- */

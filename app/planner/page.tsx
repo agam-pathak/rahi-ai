@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useRouter } from "next/navigation";
@@ -13,12 +13,23 @@ import {
   MapPin, Calendar, IndianRupee, Compass, Send, 
   Download, Share2, Trash2, History, CloudSun,
   Plane, Sparkles, MessageSquare, Lock, Unlock,
+  ClipboardCheck, PenLine,
   Settings, ShieldCheck
 } from "lucide-react"; 
 import RahiBackground from "@/components/RahiBackground";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const TripMap = dynamic(() => import("@/components/maps/TripMap"), { ssr: false });
+
+const PREMIUM_CHECKLIST = [
+  { id: "docs", label: "Government ID + booking copies" },
+  { id: "insurance", label: "Travel insurance / emergency cover" },
+  { id: "payments", label: "Primary + backup payment method" },
+  { id: "offline", label: "Offline maps + tickets downloaded" },
+  { id: "medical", label: "Basic meds + essentials packed" },
+  { id: "connect", label: "Local SIM / roaming ready" },
+];
+const ACTIVITY_TYPE_COUNT = 5;
 
 // --- TYPES ---
 
@@ -47,11 +58,21 @@ type DayPlan = {
   summary?: string;
 };
 
+type DayStat = {
+  day: number;
+  count: number;
+  cost: number;
+  duration: number;
+  distance: number;
+};
+
 type TripMeta = {
   total_estimated_budget: number;
   pace?: "relaxed" | "balanced" | "packed";
   primary_vibes?: string[];
   packing_suggestions?: string[];
+  prep_checklist?: Record<string, boolean>;
+  signature_story?: string;
 };
 
 // Full Trip Structure
@@ -141,10 +162,13 @@ export default function PlannerPage() {
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistStatus, setWaitlistStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [prepChecklist, setPrepChecklist] = useState<Record<string, boolean>>({});
+  const [storyLoading, setStoryLoading] = useState(false);
   const [pdfThemeOverride, setPdfThemeOverride] = useState<string | null>(null);
   const premiumEnabled = process.env.NEXT_PUBLIC_PREMIUM_ENABLED === "true";
   const geocodeCacheRef = useRef(new Map<string, [number, number]>());
   const geocodeRunRef = useRef<string | null>(null);
+  const checklistSaveRef = useRef<number | null>(null);
 
   const parseBudget = (value: string) => {
     const cleaned = value.replace(/,/g, "").trim();
@@ -204,6 +228,21 @@ export default function PlannerPage() {
     };
   };
 
+  const checklistDefaults = useMemo(() => {
+    const defaults: Record<string, boolean> = {};
+    PREMIUM_CHECKLIST.forEach((item) => {
+      defaults[item.id] = false;
+    });
+    return defaults;
+  }, []);
+
+  const mergeChecklist = useCallback(
+    (source?: Record<string, boolean>) => {
+      return { ...checklistDefaults, ...(source ?? {}) };
+    },
+    [checklistDefaults]
+  );
+
   const parseApiError = async (res: Response) => {
     let message = "Request failed.";
     try {
@@ -250,6 +289,73 @@ export default function PlannerPage() {
         ? "Private link copied. Only invited members can access."
         : "Share link copied ✨"
     );
+  };
+
+  const copyTripStory = async (story: string) => {
+    if (!story.trim()) {
+      showToast("Generate a trip first to create a story.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(story);
+      showToast("Trip story copied.");
+    } catch {
+      showToast("Unable to copy story.");
+    }
+  };
+
+  const refineTripStory = async () => {
+    if (!trip?.days?.length) {
+      showToast("Generate a trip to craft a story.");
+      return;
+    }
+    if (storyLoading) return;
+    setStoryLoading(true);
+    try {
+      const highlights = trip.days
+        .flatMap((day) => day.activities.map((activity) => activity.title))
+        .filter(Boolean)
+        .slice(0, 5)
+        .join(", ");
+      const prompt = `Write a premium, 2-3 sentence travel story for a ${trip.days.length}-day trip to ${
+        trip.destination
+      }. Pace: ${trip.meta?.pace || "balanced"}. Vibes: ${
+        trip.meta?.primary_vibes?.join(", ") || "signature"
+      }. Highlights: ${highlights || "curated experiences"}. Keep it crisp and elegant.`;
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: prompt,
+          history: [],
+        }),
+      });
+      if (!res.ok) {
+        const msg = await parseApiError(res);
+        showToast(msg);
+        return;
+      }
+      const data = await res.json();
+      const story = String(data.reply || "").replace(/\s+/g, " ").trim();
+      if (!story) {
+        showToast("No story returned. Try again.");
+        return;
+      }
+      setTrip((prev) =>
+        prev ? { ...prev, meta: { ...prev.meta, signature_story: story } } : prev
+      );
+      if (trip.id) {
+        await persistTripResult({
+          ...trip,
+          meta: { ...trip.meta, signature_story: story },
+        });
+      }
+      showToast("Story refined.");
+    } catch {
+      showToast("Unable to refine story right now.");
+    } finally {
+      setStoryLoading(false);
+    }
   };
 
   const startUpgrade = async () => {
@@ -625,6 +731,70 @@ export default function PlannerPage() {
       cancelled = true;
     };
   }, [trip, mapboxToken]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !trip?.id) return;
+    const fromTrip = trip.meta?.prep_checklist;
+    if (fromTrip && Object.keys(fromTrip).length) {
+      const merged = mergeChecklist(fromTrip);
+      if (JSON.stringify(merged) !== JSON.stringify(prepChecklist)) {
+        setPrepChecklist(merged);
+      }
+      return;
+    }
+    const stored = window.localStorage.getItem(`rahi-checklist-${trip.id}`);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as Record<string, boolean>;
+        const merged = mergeChecklist(parsed);
+        if (JSON.stringify(merged) !== JSON.stringify(prepChecklist)) {
+          setPrepChecklist(merged);
+        }
+        return;
+      } catch {}
+    }
+    setPrepChecklist((prev) => (Object.keys(prev).length ? prev : checklistDefaults));
+  }, [trip?.id, trip?.meta?.prep_checklist, checklistDefaults, prepChecklist, mergeChecklist]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !trip?.id) return;
+    if (!Object.keys(prepChecklist).length) return;
+    window.localStorage.setItem(
+      `rahi-checklist-${trip.id}`,
+      JSON.stringify(prepChecklist)
+    );
+  }, [prepChecklist, trip?.id]);
+
+  useEffect(() => {
+    if (!trip?.id || !isPremium) return;
+    if (!Object.keys(prepChecklist).length) return;
+    const current = trip.meta?.prep_checklist ?? {};
+    if (JSON.stringify(current) !== JSON.stringify(prepChecklist)) {
+      setTrip((prev) =>
+        prev
+          ? {
+              ...prev,
+              meta: { ...prev.meta, prep_checklist: prepChecklist },
+            }
+          : prev
+      );
+    }
+    if (checklistSaveRef.current) {
+      window.clearTimeout(checklistSaveRef.current);
+    }
+    checklistSaveRef.current = window.setTimeout(() => {
+      if (!trip) return;
+      persistTripResult({
+        ...trip,
+        meta: { ...trip.meta, prep_checklist: prepChecklist },
+      });
+    }, 800);
+    return () => {
+      if (checklistSaveRef.current) {
+        window.clearTimeout(checklistSaveRef.current);
+      }
+    };
+  }, [prepChecklist, trip, isPremium]);
 
   // --- HELPER FUNCTIONS ---
 
@@ -1520,6 +1690,29 @@ export default function PlannerPage() {
   const displayBudget =
     (totalFromMeta > 0 ? totalFromMeta : totalFromActivities) ||
     parseBudget(budget);
+  const packingSuggestions = useMemo(() => {
+    const list = trip?.meta?.packing_suggestions ?? [];
+    return list.filter(Boolean).slice(0, 6);
+  }, [trip?.meta?.packing_suggestions]);
+  const autoStory = useMemo(() => {
+    if (!trip?.destination || !tripDaysCount) return "";
+    const vibe = (trip.meta?.primary_vibes?.[0] || "").replace(/_/g, " ");
+    const vibeText = vibe ? `${vibe} ` : "";
+    const highlights = trip.days
+      .flatMap((day) => day.activities.map((activity) => activity.title))
+      .filter(Boolean)
+      .slice(0, 3);
+    const highlightText = highlights.length
+      ? `Highlights include ${highlights.join(", ")}.`
+      : "";
+    const paceText = trip.meta?.pace ? `Pace set to ${trip.meta.pace}.` : "";
+    return `Rahi.AI crafted a ${tripDaysCount}-day ${vibeText}escape to ${
+      trip.destination
+    }. ${highlightText} ${paceText}`
+      .replace(/\s+/g, " ")
+      .trim();
+  }, [trip, tripDaysCount]);
+  const signatureStory = trip?.meta?.signature_story || autoStory;
   const pdfTrip = trip ?? {
     destination: destination || "Your Trip",
     days: [],
@@ -1562,6 +1755,10 @@ export default function PlannerPage() {
     "Light jacket or rain cover",
     "Reusable water bottle",
   ];
+  const pdfChecklist = PREMIUM_CHECKLIST.map((item) => ({
+    ...item,
+    done: Boolean(prepChecklist[item.id]),
+  }));
   const pdfBudgetBreakdown = [
     { label: "Experiences", value: Math.round(displayBudget * 0.55), color: "#0f766e" },
     { label: "Food", value: Math.round(displayBudget * 0.25), color: "#f59e0b" },
@@ -1673,7 +1870,8 @@ export default function PlannerPage() {
 
   const premiumInsights = useMemo(() => {
     if (!trip?.days || trip.days.length === 0) return null;
-    const dayStats = trip.days.map((day) => {
+    const activityTypes = new Set<string>();
+    const dayStats: DayStat[] = trip.days.map((day) => {
       const cost = day.activities.reduce(
         (sum, activity) => sum + (Number(activity.estimated_cost) || 0),
         0
@@ -1682,11 +1880,22 @@ export default function PlannerPage() {
         (sum, activity) => sum + (activity.duration_minutes || 0),
         0
       );
+      let distance = 0;
+      let lastCoord: [number, number] | null = null;
+      day.activities.forEach((activity) => {
+        if (activity.type) activityTypes.add(activity.type);
+        const coord = getActivityCoord(activity);
+        if (coord && lastCoord) {
+          distance += haversineKm(lastCoord, coord);
+        }
+        if (coord) lastCoord = coord;
+      });
       return {
         day: day.day_number,
         count: day.activities.length,
         cost,
         duration,
+        distance,
       };
     });
     const flattened = trip.days.flatMap((day) =>
@@ -1712,6 +1921,21 @@ export default function PlannerPage() {
     const avgPerDay = trip.days.length
       ? Math.round((safeBudget || totalFromActivities) / trip.days.length)
       : 0;
+    const totalDuration = dayStats.reduce((sum, stat) => sum + stat.duration, 0);
+    const avgDuration = trip.days.length
+      ? Math.round(totalDuration / trip.days.length)
+      : 0;
+    const totalDistanceKm = dayStats.reduce(
+      (sum, stat) => sum + stat.distance,
+      0
+    );
+    const varietyScore = ACTIVITY_TYPE_COUNT
+      ? Math.round((activityTypes.size / ACTIVITY_TYPE_COUNT) * 100)
+      : 0;
+    const busiestDay = dayStats.reduce<DayStat | null>(
+      (max, stat) => (!max || stat.duration > max.duration ? stat : max),
+      null
+    );
     return {
       dayStats,
       expensiveActivity,
@@ -1720,6 +1944,11 @@ export default function PlannerPage() {
       canOptimize,
       budgetDelta,
       avgPerDay,
+      avgDuration,
+      totalDistanceKm: Math.round(totalDistanceKm),
+      activityTypesCount: activityTypes.size,
+      varietyScore,
+      busiestDay,
     };
   }, [trip, displayBudget, totalFromActivities]);
 
@@ -2378,6 +2607,127 @@ export default function PlannerPage() {
                         )}
                       </div>
 
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                            <Sparkles className="w-4 h-4" /> Rahi.AI Signature Plans
+                          </div>
+                          <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                            3-Plan Stack
+                          </span>
+                        </div>
+                        {isPremium ? (
+                          <div className="grid lg:grid-cols-3 gap-4">
+                            <div className="bg-black/20 p-4 rounded-lg">
+                              <div className="flex items-center gap-2 text-[11px] uppercase text-teal-200 font-semibold">
+                                <Compass className="w-3 h-3" /> Plan 1 • Precision
+                              </div>
+                              <div className="mt-3 grid grid-cols-2 gap-2">
+                                <div className="rounded-md bg-black/30 p-2">
+                                  <p className="text-[10px] text-gray-400">Variety</p>
+                                  <p className="text-sm font-bold text-white">
+                                    {premiumInsights?.varietyScore ?? 0}%
+                                  </p>
+                                </div>
+                                <div className="rounded-md bg-black/30 p-2">
+                                  <p className="text-[10px] text-gray-400">Avg Hours/Day</p>
+                                  <p className="text-sm font-bold text-white">
+                                    {premiumInsights?.avgDuration
+                                      ? (premiumInsights.avgDuration / 60).toFixed(1)
+                                      : "0.0"}
+                                    h
+                                  </p>
+                                </div>
+                                <div className="rounded-md bg-black/30 p-2">
+                                  <p className="text-[10px] text-gray-400">Distance</p>
+                                  <p className="text-sm font-bold text-white">
+                                    {premiumInsights?.totalDistanceKm ?? 0} km
+                                  </p>
+                                </div>
+                                <div className="rounded-md bg-black/30 p-2">
+                                  <p className="text-[10px] text-gray-400">Busiest</p>
+                                  <p className="text-sm font-bold text-white">
+                                    {premiumInsights?.busiestDay
+                                      ? `Day ${premiumInsights.busiestDay.day}`
+                                      : "—"}
+                                  </p>
+                                </div>
+                              </div>
+                              <p className="text-[11px] text-gray-400 mt-2">
+                                Flow tuned with distance + pace intelligence.
+                              </p>
+                            </div>
+
+                            <div className="bg-black/20 p-4 rounded-lg">
+                              <div className="flex items-center gap-2 text-[11px] uppercase text-teal-200 font-semibold">
+                                <ClipboardCheck className="w-3 h-3" /> Plan 2 • Concierge
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                {PREMIUM_CHECKLIST.map((item) => (
+                                  <label key={item.id} className="flex items-center gap-2 text-xs text-gray-300">
+                                    <input
+                                      type="checkbox"
+                                      className="h-4 w-4 accent-teal-400"
+                                      checked={prepChecklist[item.id] ?? false}
+                                      onChange={(e) =>
+                                        setPrepChecklist((prev) => ({
+                                          ...prev,
+                                          [item.id]: e.target.checked,
+                                        }))
+                                      }
+                                    />
+                                    <span className={prepChecklist[item.id] ? "line-through text-gray-500" : ""}>
+                                      {item.label}
+                                    </span>
+                                  </label>
+                                ))}
+                              </div>
+                              {packingSuggestions.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-1">
+                                  {packingSuggestions.map((item) => (
+                                    <span
+                                      key={item}
+                                      className="px-2 py-1 rounded-full text-[10px] bg-teal-500/10 border border-teal-400/20 text-teal-100"
+                                    >
+                                      {item}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="bg-black/20 p-4 rounded-lg">
+                              <div className="flex items-center gap-2 text-[11px] uppercase text-teal-200 font-semibold">
+                                <PenLine className="w-3 h-3" /> Plan 3 • Story
+                              </div>
+                              <p className="mt-3 text-xs text-gray-300 leading-relaxed">
+                                {signatureStory || "Generate a plan to unlock a shareable story."}
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => copyTripStory(signatureStory)}
+                                disabled={!signatureStory}
+                                className="mt-3 rahi-btn-secondary text-xs disabled:opacity-60"
+                              >
+                                Copy story
+                              </button>
+                              <button
+                                type="button"
+                                onClick={refineTripStory}
+                                disabled={storyLoading || !trip}
+                                className="mt-2 rahi-btn-ghost text-xs disabled:opacity-60"
+                              >
+                                {storyLoading ? "Refining..." : "Refine with AI"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-400">
+                            Upgrade to Premium to unlock Rahi.AI Signature Plans.
+                          </div>
+                        )}
+                      </div>
+
                       {(weather.length > 0 || weatherLoading || weatherError) && (
                         <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
                           <div className="flex items-center gap-2 mb-3 text-teal-400 font-bold text-sm uppercase tracking-wide">
@@ -2670,6 +3020,42 @@ export default function PlannerPage() {
 
         {pdfIsPremium && (
           <div className="pdf-page">
+            <div className="pdf-section">
+              <div className="pdf-section-title">Signature Plans</div>
+              <div className="pdf-signature-grid">
+                <div className="pdf-signature-card">
+                  <div className="pdf-signature-label">Plan 1 • Precision</div>
+                  <div className="pdf-signature-metric">
+                    Variety {premiumInsights?.varietyScore ?? 0}%
+                  </div>
+                  <div className="pdf-signature-metric">
+                    Avg {premiumInsights?.avgDuration ? (premiumInsights.avgDuration / 60).toFixed(1) : "0.0"}h/day
+                  </div>
+                  <div className="pdf-signature-metric">
+                    Distance {premiumInsights?.totalDistanceKm ?? 0} km
+                  </div>
+                </div>
+                <div className="pdf-signature-card">
+                  <div className="pdf-signature-label">Plan 2 • Concierge</div>
+                  <div className="pdf-signature-list">
+                    {pdfChecklist.slice(0, 4).map((item) => (
+                      <div
+                        key={item.id}
+                        className={`pdf-signature-item ${item.done ? "is-done" : ""}`}
+                      >
+                        {item.done ? "✓" : "•"} {item.label}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="pdf-signature-card">
+                  <div className="pdf-signature-label">Plan 3 • Story</div>
+                  <div className="pdf-signature-story">
+                    {signatureStory || "Generate a trip to unlock the story."}
+                  </div>
+                </div>
+              </div>
+            </div>
             <div className="pdf-section">
               <div className="pdf-section-title pdf-section-title-lg">Journey Timeline</div>
               {pdfTrip.days.length > 0 ? (
