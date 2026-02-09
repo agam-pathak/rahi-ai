@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 
 type Member = {
@@ -22,6 +22,10 @@ export default function TripMembersPanel({ tripId, members, canManage }: Props) 
   const [items, setItems] = useState(members);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setItems(members);
+  }, [members]);
 
   const updateRole = async (userId: string, role: "editor" | "viewer") => {
     if (!canManage) return;

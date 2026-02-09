@@ -1,8 +1,7 @@
 import { getTripWithMembers, getMyTripRole } from "@/lib/trips/members";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import AddMemberButton from "@/components/trips/AddMemberButton";
-import TripMembersPanel from "@/components/trips/TripMembersPanel";
+import TripMembersSection from "@/components/trips/TripMembersSection";
 import TripItinerary from "@/components/trips/TripItinerary";
 import RahiBackground from "@/components/RahiBackground";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -327,22 +326,11 @@ export default async function TripView({ params }: PageProps) {
               Trip Members
             </h3>
           </div>
-          {myRole ? (
-            <>
-              {myRole === "owner" && (
-                <AddMemberButton tripId={trip.id} />
-              )}
-              <TripMembersPanel
-                tripId={trip.id}
-                members={tripMembers}
-                canManage={myRole === "owner"}
-              />
-            </>
-          ) : (
-            <p className="text-xs text-gray-500">
-              Sign in to view collaborators.
-            </p>
-          )}
+          <TripMembersSection
+            tripId={trip.id}
+            initialMembers={tripMembers}
+            initialRole={myRole}
+          />
         </div>
       </div>
     </div>
