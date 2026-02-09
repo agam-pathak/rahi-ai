@@ -13,13 +13,6 @@ export async function POST(req: Request) {
       { status: 429, headers: rlHeaders }
     );
   }
-  if (!supabaseAdmin) {
-    return NextResponse.json(
-      { error: "Admin client not configured" },
-      { status: 500 }
-    );
-  }
-
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -44,19 +37,51 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data, error } = await supabaseAdmin
+  if (supabaseAdmin) {
+    const { data, error } = await supabaseAdmin.auth.admin.getUserByEmail(email);
+    if (error || !data?.user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const found = data.user;
+    const displayName =
+      (found.user_metadata?.name as string | undefined) ||
+      (found.user_metadata?.full_name as string | undefined) ||
+      (found.email ? found.email.split("@")[0] : null);
+
+    await supabaseAdmin
+      .from("profiles")
+      .upsert(
+        {
+          id: found.id,
+          email: found.email ?? email,
+          name: displayName,
+        },
+        { onConflict: "id" }
+      );
+
+    return NextResponse.json({ id: found.id, email: found.email ?? email });
+  }
+
+  const { data, error } = await supabase
     .from("profiles")
     .select("id, email")
     .ilike("email", email)
     .limit(1);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Lookup unavailable. Configure SUPABASE_SERVICE_ROLE_KEY." },
+      { status: 500 }
+    );
   }
 
   const match = data?.[0];
   if (!match) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "User not found. Ask them to sign in once or share their user ID." },
+      { status: 404 }
+    );
   }
 
   return NextResponse.json({ id: match.id, email: match.email });

@@ -70,6 +70,10 @@ export default function AddMemberModal({ tripId, onClose }: Props) {
           placeholder="Email or User ID"
           className="w-full rounded bg-zinc-800 px-3 py-2 text-sm outline-none"
         />
+        <p className="mt-2 text-[11px] text-gray-400">
+          Enter an email or the user ID from their Profile page. The user must have signed in
+          at least once.
+        </p>
 
         <div className="mt-3">
           <label className="text-[11px] uppercase tracking-wide text-gray-400">
