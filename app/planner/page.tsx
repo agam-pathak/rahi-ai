@@ -204,46 +204,6 @@ export default function PlannerPage() {
   const geocodeRunRef = useRef<string | null>(null);
   const checklistSaveRef = useRef<number | null>(null);
   const canSearchStays = Boolean(destination.trim() && checkIn && checkOut);
-  const stayParams = useMemo(
-    () => ({
-      destination: destination.trim(),
-      checkin: checkIn,
-      checkout: checkOut,
-      guests: String(parseStayNumber(guests, 2)),
-      rooms: String(parseStayNumber(rooms, 1)),
-    }),
-    [destination, checkIn, checkOut, guests, rooms]
-  );
-  const hostelworldFallback = useMemo(() => {
-    const trimmed = destination.trim();
-    if (!trimmed) return "https://www.hostelworld.com/hostels/";
-    const slug = slugifyDestination(trimmed);
-    if (!slug) return "https://www.hostelworld.com/hostels/";
-    return `https://www.hostelworld.com/hostels/asia/india/r/${slug}/`;
-  }, [destination]);
-  const tripadvisorFallback = useMemo(() => {
-    const trimmed = destination.trim();
-    if (!trimmed) return "https://www.tripadvisor.com/Search";
-    return `https://www.tripadvisor.com/Search?q=${encodeURIComponent(trimmed)}`;
-  }, [destination]);
-  const hostelworldLink = useMemo(
-    () =>
-      buildDeepLink(
-        process.env.NEXT_PUBLIC_HOSTELWORLD_DEEPLINK_TEMPLATE,
-        hostelworldFallback,
-        stayParams
-      ),
-    [hostelworldFallback, stayParams]
-  );
-  const tripadvisorLink = useMemo(
-    () =>
-      buildDeepLink(
-        process.env.NEXT_PUBLIC_TRIPADVISOR_DEEPLINK_TEMPLATE,
-        tripadvisorFallback,
-        stayParams
-      ),
-    [tripadvisorFallback, stayParams]
-  );
 
   const parseBudget = (value: string) => {
     const cleaned = value.replace(/,/g, "").trim();
@@ -294,6 +254,47 @@ export default function PlannerPage() {
       encodeURIComponent(params[key] ?? "")
     );
   };
+
+  const stayParams = useMemo(
+    () => ({
+      destination: destination.trim(),
+      checkin: checkIn,
+      checkout: checkOut,
+      guests: String(parseStayNumber(guests, 2)),
+      rooms: String(parseStayNumber(rooms, 1)),
+    }),
+    [destination, checkIn, checkOut, guests, rooms]
+  );
+  const hostelworldFallback = useMemo(() => {
+    const trimmed = destination.trim();
+    if (!trimmed) return "https://www.hostelworld.com/hostels/";
+    const slug = slugifyDestination(trimmed);
+    if (!slug) return "https://www.hostelworld.com/hostels/";
+    return `https://www.hostelworld.com/hostels/asia/india/r/${slug}/`;
+  }, [destination]);
+  const tripadvisorFallback = useMemo(() => {
+    const trimmed = destination.trim();
+    if (!trimmed) return "https://www.tripadvisor.com/Search";
+    return `https://www.tripadvisor.com/Search?q=${encodeURIComponent(trimmed)}`;
+  }, [destination]);
+  const hostelworldLink = useMemo(
+    () =>
+      buildDeepLink(
+        process.env.NEXT_PUBLIC_HOSTELWORLD_DEEPLINK_TEMPLATE,
+        hostelworldFallback,
+        stayParams
+      ),
+    [hostelworldFallback, stayParams]
+  );
+  const tripadvisorLink = useMemo(
+    () =>
+      buildDeepLink(
+        process.env.NEXT_PUBLIC_TRIPADVISOR_DEEPLINK_TEMPLATE,
+        tripadvisorFallback,
+        stayParams
+      ),
+    [tripadvisorFallback, stayParams]
+  );
 
   const getActivityCoord = (activity: Activity) => {
     const coord = activity.location?.coordinates;
