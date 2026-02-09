@@ -38,12 +38,33 @@ export async function POST(req: Request) {
   }
 
   if (supabaseAdmin) {
-    const { data, error } = await supabaseAdmin.auth.admin.getUserByEmail(email);
-    if (error || !data?.user) {
+    const perPage = 1000;
+    let page = 1;
+    let found: { id: string; email?: string | null; user_metadata?: Record<string, unknown> } | null = null;
+
+    while (!found) {
+      const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+
+      if (error) {
+        return NextResponse.json({ error: "User lookup failed" }, { status: 500 });
+      }
+
+      const users = data?.users ?? [];
+      found = users.find(
+        (candidate) => (candidate.email ?? "").toLowerCase() === email
+      ) ?? null;
+
+      if (found || users.length < perPage) break;
+      page += 1;
+    }
+
+    if (!found) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const found = data.user;
     const displayName =
       (found.user_metadata?.name as string | undefined) ||
       (found.user_metadata?.full_name as string | undefined) ||
