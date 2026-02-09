@@ -13,7 +13,7 @@ import {
   MapPin, Calendar, IndianRupee, Compass, Send, 
   Download, Share2, Trash2, History, CloudSun,
   Plane, Sparkles, MessageSquare, Lock, Unlock,
-  ClipboardCheck, PenLine, BedDouble, Users,
+  ClipboardCheck, PenLine,
   Settings, ShieldCheck
 } from "lucide-react"; 
 import RahiBackground from "@/components/RahiBackground";
@@ -72,6 +72,7 @@ type TripMeta = {
   primary_vibes?: string[];
   packing_suggestions?: string[];
   prep_checklist?: Record<string, boolean>;
+  group_state?: GroupState;
   signature_story?: string;
 };
 
@@ -99,20 +100,29 @@ type WeatherItem = {
   weather?: { description?: string }[];
 };
 
-type StayTab = "hotels" | "hostels";
+type GroupPollOption = {
+  id: string;
+  label: string;
+  votes: number;
+};
 
-type StayResult = {
-  id: number;
-  name: string;
-  price?: number;
-  currency?: string;
-  url?: string;
-  deepLinkUrl?: string;
-  reviewScore?: number;
-  stars?: number;
-  reviewCount?: number;
-  photoUrl?: string;
-  freeCancellation?: boolean;
+type GroupPoll = {
+  id: string;
+  question: string;
+  options: GroupPollOption[];
+  createdAt: number;
+};
+
+type GroupDecision = {
+  id: string;
+  text: string;
+  done: boolean;
+};
+
+type GroupState = {
+  members?: string[];
+  polls?: GroupPoll[];
+  decisions?: GroupDecision[];
 };
 
 type VoiceSettings = {
@@ -143,24 +153,16 @@ export default function PlannerPage() {
   const [interests, setInterests] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Booking Inputs
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [guests, setGuests] = useState("2");
-  const [rooms, setRooms] = useState("1");
-  const [stayTab, setStayTab] = useState<StayTab>("hotels");
-  const [stayResults, setStayResults] = useState<StayResult[]>([]);
-  const [stayResultsType, setStayResultsType] = useState<StayTab | null>(null);
-  const [stayLoading, setStayLoading] = useState(false);
-  const [stayError, setStayError] = useState<string | null>(null);
-  const [stayQuery, setStayQuery] = useState<{
-    destination: string;
-    checkIn: string;
-    checkOut: string;
-    guests: number;
-    rooms: number;
-  } | null>(null);
-  
+  // Group Coordination
+  const [groupMembers, setGroupMembers] = useState<string[]>([]);
+  const [groupMemberInput, setGroupMemberInput] = useState("");
+  const [groupPolls, setGroupPolls] = useState<GroupPoll[]>([]);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptionsInput, setPollOptionsInput] = useState("");
+  const [groupDecisions, setGroupDecisions] = useState<GroupDecision[]>([]);
+  const [decisionInput, setDecisionInput] = useState("");
+  const [groupLoaded, setGroupLoaded] = useState(false);
+
   // History & Context
   const [history, setHistory] = useState<SavedTrip[]>([]);
   const [weather, setWeather] = useState<WeatherItem[]>([]);
@@ -192,6 +194,8 @@ export default function PlannerPage() {
   const [fixingTrip, setFixingTrip] = useState(false);
   const [mapEnriching, setMapEnriching] = useState(false);
   const [optimizingRoutes, setOptimizingRoutes] = useState(false);
+  const [optimizingDay, setOptimizingDay] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number>(1);
   const [billingLoading, setBillingLoading] = useState(false);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState("");
@@ -203,7 +207,13 @@ export default function PlannerPage() {
   const geocodeCacheRef = useRef(new Map<string, [number, number]>());
   const geocodeRunRef = useRef<string | null>(null);
   const checklistSaveRef = useRef<number | null>(null);
-  const canSearchStays = Boolean(destination.trim() && checkIn && checkOut);
+  const groupSaveRef = useRef<number | null>(null);
+  const groupStorageKey =
+    trip?.id
+      ? `rahi-group-${trip.id}`
+      : destination.trim()
+        ? `rahi-group-${destination.trim().toLowerCase()}`
+        : null;
 
   const parseBudget = (value: string) => {
     const cleaned = value.replace(/,/g, "").trim();
@@ -216,85 +226,10 @@ export default function PlannerPage() {
     return value.toLocaleString("en-IN");
   };
 
-  const parseStayNumber = (value: string, fallback: number) => {
-    const parsed = Number(value);
-    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-    return Math.floor(parsed);
-  };
+  const createLocalId = () =>
+    (globalThis.crypto?.randomUUID?.() ??
+      `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
-  const formatStayPrice = (value?: number, currency?: string) => {
-    if (!Number.isFinite(value)) return "";
-    const safeCurrency = currency && /^[A-Z]{3}$/.test(currency) ? currency : "INR";
-    try {
-      return new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: safeCurrency,
-        maximumFractionDigits: 0,
-      }).format(value as number);
-    } catch {
-      return `${safeCurrency} ${Math.round(value as number).toLocaleString("en-IN")}`;
-    }
-  };
-
-  const slugifyDestination = (value: string) => {
-    return value
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-  };
-
-  const buildDeepLink = (
-    template: string | undefined,
-    fallback: string,
-    params: Record<string, string>
-  ) => {
-    if (!template) return fallback;
-    return template.replace(/\{(\w+)\}/g, (_, key) =>
-      encodeURIComponent(params[key] ?? "")
-    );
-  };
-
-  const stayParams = useMemo(
-    () => ({
-      destination: destination.trim(),
-      checkin: checkIn,
-      checkout: checkOut,
-      guests: String(parseStayNumber(guests, 2)),
-      rooms: String(parseStayNumber(rooms, 1)),
-    }),
-    [destination, checkIn, checkOut, guests, rooms]
-  );
-  const hostelworldFallback = useMemo(() => {
-    const trimmed = destination.trim();
-    if (!trimmed) return "https://www.hostelworld.com/hostels/";
-    const slug = slugifyDestination(trimmed);
-    if (!slug) return "https://www.hostelworld.com/hostels/";
-    return `https://www.hostelworld.com/hostels/asia/india/r/${slug}/`;
-  }, [destination]);
-  const tripadvisorFallback = useMemo(() => {
-    const trimmed = destination.trim();
-    if (!trimmed) return "https://www.tripadvisor.com/Search";
-    return `https://www.tripadvisor.com/Search?q=${encodeURIComponent(trimmed)}`;
-  }, [destination]);
-  const hostelworldLink = useMemo(
-    () =>
-      buildDeepLink(
-        process.env.NEXT_PUBLIC_HOSTELWORLD_DEEPLINK_TEMPLATE,
-        hostelworldFallback,
-        stayParams
-      ),
-    [hostelworldFallback, stayParams]
-  );
-  const tripadvisorLink = useMemo(
-    () =>
-      buildDeepLink(
-        process.env.NEXT_PUBLIC_TRIPADVISOR_DEEPLINK_TEMPLATE,
-        tripadvisorFallback,
-        stayParams
-      ),
-    [tripadvisorFallback, stayParams]
-  );
 
   const getActivityCoord = (activity: Activity) => {
     const coord = activity.location?.coordinates;
@@ -350,8 +285,6 @@ export default function PlannerPage() {
     });
     return defaults;
   }, []);
-
-  const todayISO = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   const mergeChecklist = useCallback(
     (source?: Record<string, boolean>) => {
@@ -573,61 +506,6 @@ export default function PlannerPage() {
       setWeatherError("Weather request failed.");
     } finally {
       setWeatherLoading(false);
-    }
-  };
-
-  const searchStays = async (type: StayTab) => {
-    if (stayLoading) return;
-    const city = destination.trim();
-    if (!city) {
-      showToast("Add a destination first.");
-      return;
-    }
-    if (!checkIn || !checkOut) {
-      showToast("Select check-in and check-out dates.");
-      return;
-    }
-    const adults = parseStayNumber(guests, 2);
-    const roomCount = parseStayNumber(rooms, 1);
-    setStayLoading(true);
-    setStayError(null);
-    setStayResultsType(type);
-    try {
-      const res = await fetch("/api/booking/bookingcom/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          destination: city,
-          checkIn,
-          checkOut,
-          guests: adults,
-          rooms: roomCount,
-          stayType: type,
-        }),
-      });
-      if (!res.ok) {
-        const msg = await parseApiError(res);
-        setStayError(msg || "Stay search failed.");
-        setStayResults([]);
-        return;
-      }
-      const data = await res.json();
-      const results = Array.isArray(data?.results) ? data.results : [];
-      setStayResults(results);
-      setStayQuery({
-        destination: city,
-        checkIn,
-        checkOut,
-        guests: adults,
-        rooms: roomCount,
-      });
-      if (results.length === 0) {
-        setStayError(null);
-      }
-    } catch {
-      setStayError("Stay search failed. Please try again.");
-    } finally {
-      setStayLoading(false);
     }
   };
 
@@ -968,6 +846,104 @@ export default function PlannerPage() {
     };
   }, [prepChecklist, trip, isPremium]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      setGroupLoaded(false);
+      return;
+    }
+
+    const fromTrip = trip?.meta?.group_state;
+    if (fromTrip) {
+      setGroupMembers(Array.isArray(fromTrip.members) ? fromTrip.members : []);
+      setGroupPolls(Array.isArray(fromTrip.polls) ? fromTrip.polls : []);
+      setGroupDecisions(Array.isArray(fromTrip.decisions) ? fromTrip.decisions : []);
+      setGroupLoaded(true);
+      return;
+    }
+
+    if (!groupStorageKey) {
+      setGroupLoaded(false);
+      return;
+    }
+
+    const stored = window.localStorage.getItem(groupStorageKey);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as {
+          members?: string[];
+          polls?: GroupPoll[];
+          decisions?: GroupDecision[];
+        };
+        setGroupMembers(Array.isArray(parsed.members) ? parsed.members : []);
+        setGroupPolls(Array.isArray(parsed.polls) ? parsed.polls : []);
+        setGroupDecisions(Array.isArray(parsed.decisions) ? parsed.decisions : []);
+      } catch {
+        setGroupMembers([]);
+        setGroupPolls([]);
+        setGroupDecisions([]);
+      }
+    } else {
+      setGroupMembers([]);
+      setGroupPolls([]);
+      setGroupDecisions([]);
+    }
+    setGroupLoaded(true);
+  }, [groupStorageKey, trip?.meta?.group_state]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !groupStorageKey || !groupLoaded) return;
+    window.localStorage.setItem(
+      groupStorageKey,
+      JSON.stringify({
+        members: groupMembers,
+        polls: groupPolls,
+        decisions: groupDecisions,
+      })
+    );
+  }, [groupStorageKey, groupLoaded, groupMembers, groupPolls, groupDecisions]);
+
+  useEffect(() => {
+    if (!trip?.id || !groupLoaded) return;
+    const groupState: GroupState = {
+      members: groupMembers,
+      polls: groupPolls,
+      decisions: groupDecisions,
+    };
+    const current = trip.meta?.group_state ?? {};
+    if (JSON.stringify(current) !== JSON.stringify(groupState)) {
+      setTrip((prev) =>
+        prev
+          ? {
+              ...prev,
+              meta: { ...prev.meta, group_state: groupState },
+            }
+          : prev
+      );
+    }
+    if (groupSaveRef.current) {
+      window.clearTimeout(groupSaveRef.current);
+    }
+    groupSaveRef.current = window.setTimeout(() => {
+      if (!trip) return;
+      persistTripResult({
+        ...trip,
+        meta: { ...trip.meta, group_state: groupState },
+      });
+    }, 800);
+    return () => {
+      if (groupSaveRef.current) {
+        window.clearTimeout(groupSaveRef.current);
+      }
+    };
+  }, [groupMembers, groupPolls, groupDecisions, groupLoaded, trip]);
+
+  useEffect(() => {
+    if (!trip?.days?.length) return;
+    if (!trip.days.some((day) => day.day_number === selectedDay)) {
+      setSelectedDay(trip.days[0].day_number);
+    }
+  }, [trip?.days, selectedDay]);
+
   // --- HELPER FUNCTIONS ---
 
   const downloadPDF = async () => {
@@ -1046,6 +1022,89 @@ export default function PlannerPage() {
 
   const looksLikeItinerary = (text: string) => {
     return /day\s*1/i.test(text);
+  };
+
+  const addGroupMember = () => {
+    const name = groupMemberInput.trim();
+    if (!name) return;
+    setGroupMembers((prev) => {
+      if (prev.includes(name)) return prev;
+      return [...prev, name];
+    });
+    setGroupMemberInput("");
+  };
+
+  const removeGroupMember = (name: string) => {
+    setGroupMembers((prev) => prev.filter((member) => member !== name));
+  };
+
+  const addGroupDecision = () => {
+    const text = decisionInput.trim();
+    if (!text) return;
+    const next: GroupDecision = { id: createLocalId(), text, done: false };
+    setGroupDecisions((prev) => [next, ...prev]);
+    setDecisionInput("");
+  };
+
+  const toggleGroupDecision = (id: string) => {
+    setGroupDecisions((prev) =>
+      prev.map((decision) =>
+        decision.id === id
+          ? { ...decision, done: !decision.done }
+          : decision
+      )
+    );
+  };
+
+  const addGroupPoll = () => {
+    const question = pollQuestion.trim();
+    if (!question) {
+      showToast("Add a poll question.");
+      return;
+    }
+    const options = pollOptionsInput
+      .split(",")
+      .map((option) => option.trim())
+      .filter(Boolean)
+      .slice(0, 6);
+    if (options.length < 2) {
+      showToast("Add at least two poll options.");
+      return;
+    }
+    const poll: GroupPoll = {
+      id: createLocalId(),
+      question,
+      options: options.map((label) => ({
+        id: createLocalId(),
+        label,
+        votes: 0,
+      })),
+      createdAt: Date.now(),
+    };
+    setGroupPolls((prev) => [poll, ...prev]);
+    setPollQuestion("");
+    setPollOptionsInput("");
+  };
+
+  const voteGroupPoll = (pollId: string, optionId: string) => {
+    setGroupPolls((prev) =>
+      prev.map((poll) =>
+        poll.id === pollId
+          ? {
+              ...poll,
+              options: poll.options.map((option) =>
+                option.id === optionId
+                  ? { ...option, votes: option.votes + 1 }
+                  : option
+              ),
+            }
+          : poll
+      )
+    );
+  };
+
+  const removeGroupPoll = (pollId: string) => {
+    setGroupPolls((prev) => prev.filter((poll) => poll.id !== pollId));
   };
 
   const deleteTrip = (index: number) => {
@@ -1518,6 +1577,96 @@ export default function PlannerPage() {
       showToast("Route optimization failed.");
     } finally {
       setOptimizingRoutes(false);
+    }
+  };
+
+  const optimizeDayPlan = async (dayNumber: number) => {
+    if (!trip || optimizingDay) return;
+    const day = trip.days.find((entry) => entry.day_number === dayNumber);
+    if (!day) return;
+
+    setOptimizingDay(true);
+    try {
+      const sorted = [...day.activities].sort(
+        (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+      );
+      const withCoords = sorted.filter((activity) => getActivityCoord(activity));
+      const withoutCoords = sorted.filter((activity) => !getActivityCoord(activity));
+
+      let merged = sorted;
+      let didOptimize = false;
+
+      if (withCoords.length >= 2) {
+        const remaining = [...withCoords];
+        const ordered: Activity[] = [];
+        ordered.push(remaining.shift()!);
+        while (remaining.length > 0) {
+          const last = ordered[ordered.length - 1];
+          const lastCoord = getActivityCoord(last);
+          if (!lastCoord) {
+            ordered.push(...remaining);
+            break;
+          }
+          let bestIndex = 0;
+          let bestDist = Infinity;
+          remaining.forEach((candidate, index) => {
+            const coord = getActivityCoord(candidate);
+            if (!coord) return;
+            const dist = haversineKm(lastCoord, coord);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestIndex = index;
+            }
+          });
+          const [next] = remaining.splice(bestIndex, 1);
+          ordered.push(next);
+        }
+        merged = [...ordered, ...withoutCoords];
+        didOptimize = true;
+      }
+
+      const weatherText =
+        weather?.[dayNumber - 1]?.weather?.[0]?.description?.toLowerCase() ?? "";
+      const isRainy = /rain|storm|drizzle|shower|thunder/.test(weatherText);
+      if (isRainy) {
+        const outdoorTypes = new Set(["sightseeing", "experience"]);
+        const indoor = merged.filter(
+          (activity) => !outdoorTypes.has(activity.type ?? "")
+        );
+        const outdoor = merged.filter((activity) =>
+          outdoorTypes.has(activity.type ?? "")
+        );
+        merged = [...indoor, ...outdoor];
+        didOptimize = true;
+      }
+
+      if (!didOptimize) {
+        showToast("Not enough data to optimize this day.");
+        return;
+      }
+
+      const normalized = merged.map((activity, index) => ({
+        ...activity,
+        order_index: index,
+      }));
+
+      const updatedTrip = applyBudgetToTrip({
+        ...trip,
+        days: trip.days.map((entry) =>
+          entry.day_number === dayNumber
+            ? { ...entry, activities: normalized }
+            : entry
+        ),
+      });
+
+      setTrip(updatedTrip);
+      updateHistoryEntry(updatedTrip);
+      await persistTripResult(updatedTrip);
+      showToast(isRainy ? "Day optimized for weather + distance." : "Day optimized.");
+    } catch {
+      showToast("Day optimization failed.");
+    } finally {
+      setOptimizingDay(false);
     }
   };
 
@@ -2124,6 +2273,75 @@ export default function PlannerPage() {
     };
   }, [trip, displayBudget, totalFromActivities]);
 
+  const stayFit = useMemo(() => {
+    if (!trip) return null;
+    const safeBudget = Number.isFinite(displayBudget)
+      ? displayBudget || 0
+      : totalFromActivities || 0;
+    const budgetPerDay = tripDaysCount
+      ? Math.round(safeBudget / tripDaysCount)
+      : 0;
+    const pace = trip.meta?.pace || "balanced";
+    let score = 55;
+    if (budgetPerDay >= 3500) score += 25;
+    else if (budgetPerDay >= 2500) score += 18;
+    else if (budgetPerDay >= 1500) score += 10;
+    else score -= 5;
+    if (pace === "relaxed") score += 5;
+    if (pace === "packed") score -= 5;
+    if ((premiumInsights?.totalDistanceKm ?? 0) >= 12) score -= 5;
+    if ((premiumInsights?.totalDistanceKm ?? 0) <= 5) score += 5;
+    score = Math.min(95, Math.max(35, score));
+
+    const vibe = trip.meta?.primary_vibes?.[0] || "";
+    const areaTips = [
+      vibe === "nightlife" && "Stay near central entertainment districts for late-night safety.",
+      vibe === "nature" && "Pick stays closer to parks, ghats, or foothill zones to cut commute time.",
+      vibe === "cultural" && "Old town/heritage cores keep you near monuments and markets.",
+      vibe === "chill" && "Choose quieter residential areas within 10-15 minutes of the center.",
+      vibe === "budget_friendly" && "Transit-adjacent areas reduce cab spend while staying connected.",
+      vibe === "high_energy" && "Central hubs keep the day packed with minimal travel time.",
+    ].filter(Boolean) as string[];
+
+    const commuteTip =
+      (premiumInsights?.totalDistanceKm ?? 0) >= 12
+        ? "Cluster stays by zone to avoid long cross-city hops."
+        : "Staying central keeps ride times short and plans flexible.";
+
+    const budgetGuide =
+      budgetPerDay >= 3000
+        ? "Comfort stay: boutique or 3–4★ options with flexible neighborhoods."
+        : budgetPerDay >= 1800
+          ? "Value stay: clean 2–3★ stays close to transit and eateries."
+          : "Budget stay: dorms/guesthouses and walkable areas to save commute costs.";
+
+    return {
+      score,
+      budgetPerDay,
+      pace,
+      areaTips: areaTips.length ? areaTips : ["Pick a central, well-connected area for easy access."],
+      commuteTip,
+      budgetGuide,
+    };
+  }, [trip, displayBudget, totalFromActivities, tripDaysCount, premiumInsights]);
+
+  const groupBudgetTotal = useMemo(() => {
+    const safeBudget = Number.isFinite(displayBudget)
+      ? displayBudget || 0
+      : totalFromActivities || 0;
+    return Math.max(safeBudget, 0);
+  }, [displayBudget, totalFromActivities]);
+  const groupMemberCount = Math.max(groupMembers.length, 1);
+  const groupPerPerson = groupMemberCount
+    ? Math.round(groupBudgetTotal / groupMemberCount)
+    : 0;
+
+  const selectedDayWeather = useMemo(() => {
+    if (!weather?.length) return null;
+    const index = Math.max(selectedDay - 1, 0);
+    return weather[index] ?? null;
+  }, [weather, selectedDay]);
+
   return (
     <main className="relative min-h-screen bg-black text-white selection:bg-teal-500 selection:text-black overflow-hidden">
       {/* 1. GLOBAL ANIMATED BACKGROUND */}
@@ -2404,66 +2622,6 @@ export default function PlannerPage() {
                     value={interests}
                     onChange={(e) => setInterests(e.target.value)}
                   />
-                </div>
-
-                <div className="rahi-card p-4 border border-white/10">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="rahi-label">Stay Details (optional)</span>
-                    <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
-                      Booking
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className={inputContainer}>
-                      <label className={labelStyle}>Check-in</label>
-                      <Calendar className={inputIcon} />
-                      <input
-                        className={inputField}
-                        type="date"
-                        min={todayISO}
-                        value={checkIn}
-                        onChange={(e) => setCheckIn(e.target.value)}
-                      />
-                    </div>
-                    <div className={inputContainer}>
-                      <label className={labelStyle}>Check-out</label>
-                      <Calendar className={inputIcon} />
-                      <input
-                        className={inputField}
-                        type="date"
-                        min={checkIn || todayISO}
-                        value={checkOut}
-                        onChange={(e) => setCheckOut(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                    <div className={inputContainer}>
-                      <label className={labelStyle}>Guests</label>
-                      <Users className={inputIcon} />
-                      <input
-                        className={inputField}
-                        type="number"
-                        min={1}
-                        value={guests}
-                        onChange={(e) => setGuests(e.target.value)}
-                      />
-                    </div>
-                    <div className={inputContainer}>
-                      <label className={labelStyle}>Rooms</label>
-                      <BedDouble className={inputIcon} />
-                      <input
-                        className={inputField}
-                        type="number"
-                        min={1}
-                        value={rooms}
-                        onChange={(e) => setRooms(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-2">
-                    Used to search hotels and hostels on Booking.com.
-                  </p>
                 </div>
 
                 {formError && (
@@ -3065,169 +3223,293 @@ export default function PlannerPage() {
                         )}
                       </div>
 
-                      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
-                            <BedDouble className="w-4 h-4" /> Book Stays
+                      {stayFit && (
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                              <Compass className="w-4 h-4" /> Stay Fit Score
+                            </div>
+                            <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                              Non-booking
+                            </span>
                           </div>
-                          <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
-                            Booking.com
-                          </span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 mb-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setStayTab("hotels");
-                              setStayError(null);
-                            }}
-                            className={`rahi-btn-ghost text-[10px] ${
-                              stayTab === "hotels"
-                                ? "border border-teal-500/40 bg-teal-500/10 text-teal-300"
-                                : "text-gray-400"
-                            }`}
-                          >
-                            Hotels
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setStayTab("hostels");
-                              setStayError(null);
-                            }}
-                            className={`rahi-btn-ghost text-[10px] ${
-                              stayTab === "hostels"
-                                ? "border border-teal-500/40 bg-teal-500/10 text-teal-300"
-                                : "text-gray-400"
-                            }`}
-                          >
-                            Hostels / Dorms
-                          </button>
-                          <div className="text-[11px] text-gray-400 ml-auto">
-                            {stayQuery && stayResultsType === stayTab
-                              ? `${stayQuery.checkIn} → ${stayQuery.checkOut}`
-                              : checkIn && checkOut
-                                ? `${checkIn} → ${checkOut}`
-                                : "Add stay dates"}
-                            {" "}• {parseStayNumber(guests, 2)} guests • {parseStayNumber(rooms, 1)} rooms
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            <div className="bg-black/20 p-3 rounded-lg">
+                              <p className="text-xs text-gray-400">Score</p>
+                              <p
+                                className={`text-lg font-bold ${
+                                  stayFit.score >= 80
+                                    ? "text-emerald-300"
+                                    : stayFit.score >= 60
+                                      ? "text-teal-300"
+                                      : "text-amber-300"
+                                }`}
+                              >
+                                {stayFit.score}
+                              </p>
+                            </div>
+                            <div className="bg-black/20 p-3 rounded-lg">
+                              <p className="text-xs text-gray-400">Budget / Day</p>
+                              <p className="text-lg font-bold text-white">
+                                ₹{formatCurrency(stayFit.budgetPerDay)}
+                              </p>
+                            </div>
+                            <div className="bg-black/20 p-3 rounded-lg">
+                              <p className="text-xs text-gray-400">Pace</p>
+                              <p className="text-lg font-bold text-white capitalize">
+                                {stayFit.pace}
+                              </p>
+                            </div>
+                            <div className="bg-black/20 p-3 rounded-lg">
+                              <p className="text-xs text-gray-400">Trip Distance</p>
+                              <p className="text-lg font-bold text-white">
+                                {premiumInsights?.totalDistanceKm ?? 0} km
+                              </p>
+                              <p className="text-[10px] text-gray-500 mt-1">
+                                {stayFit.commuteTip}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="mt-3 grid md:grid-cols-2 gap-3">
+                            <div className="bg-black/20 p-3 rounded-lg">
+                              <p className="text-xs text-gray-400">Where to stay</p>
+                              <div className="mt-2 space-y-1">
+                                {stayFit.areaTips.map((tip) => (
+                                  <p key={tip} className="text-xs text-gray-300">
+                                    • {tip}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                            <div className="bg-black/20 p-3 rounded-lg">
+                              <p className="text-xs text-gray-400">Budget guidance</p>
+                              <p className="mt-2 text-xs text-gray-300">
+                                {stayFit.budgetGuide}
+                              </p>
+                            </div>
                           </div>
                         </div>
+                      )}
 
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => searchStays(stayTab)}
-                            disabled={!canSearchStays || stayLoading}
-                            className="rahi-btn-primary text-xs px-4 py-2 disabled:opacity-60"
-                          >
-                            {stayLoading ? "Searching..." : "Search stays"}
-                          </button>
-                          <span className="text-[11px] text-gray-500">
-                            Deep-link only • Complete booking on Booking.com
-                          </span>
-                        </div>
-
-                        {!canSearchStays && (
-                          <p className="text-[11px] text-gray-500 mt-2">
-                            Add check-in and check-out dates to search stays.
-                          </p>
-                        )}
-
-                        {stayError && (
-                          <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
-                            {stayError}
+                      {trip?.days?.length > 0 && (
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                              <Settings className="w-4 h-4" /> Day-of Optimization
+                            </div>
+                            <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                              Live adjustments
+                            </span>
                           </div>
-                        )}
-
-                        {!stayLoading && stayResultsType !== stayTab && !stayError && (
-                          <p className="text-[11px] text-gray-500 mt-3">
-                            Search to see live {stayTab === "hostels" ? "hostel" : "hotel"} options.
-                          </p>
-                        )}
-
-                        {stayResultsType === stayTab && !stayLoading && !stayError && stayResults.length === 0 && (
-                          <p className="text-[11px] text-gray-500 mt-3">
-                            No stays found. Try different dates or a nearby city.
-                          </p>
-                        )}
-
-                        {stayResultsType === stayTab && stayResults.length > 0 && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
-                            {stayResults.map((stay) => {
-                              const priceLabel = formatStayPrice(stay.price, stay.currency);
-                              return (
-                                <div
-                                  key={stay.id}
-                                  className="bg-black/25 border border-white/10 rounded-lg p-4"
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex flex-wrap gap-2">
+                              {trip.days.map((day) => (
+                                <button
+                                  key={day.day_number}
+                                  type="button"
+                                  onClick={() => setSelectedDay(day.day_number)}
+                                  className={`rahi-btn-ghost text-[10px] ${
+                                    selectedDay === day.day_number
+                                      ? "border border-teal-500/40 bg-teal-500/10 text-teal-300"
+                                      : "text-gray-400"
+                                  }`}
                                 >
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div>
-                                      <p className="text-sm font-semibold text-white">{stay.name}</p>
-                                      {stay.stars ? (
-                                        <p className="text-[11px] text-gray-400">{stay.stars}★ property</p>
-                                      ) : (
-                                        <p className="text-[11px] text-gray-500">Verified stay</p>
-                                      )}
-                                    </div>
-                                    {stay.reviewScore ? (
-                                      <span className="text-xs text-teal-300">★ {stay.reviewScore.toFixed(1)}</span>
-                                    ) : null}
-                                  </div>
-                                  <div className="mt-3 flex items-center justify-between gap-3">
-                                    <div>
-                                      {priceLabel ? (
-                                        <div className="text-sm font-semibold text-teal-200">{priceLabel}</div>
-                                      ) : (
-                                        <div className="text-xs text-gray-400">Price on Booking.com</div>
-                                      )}
-                                      {stay.freeCancellation && (
-                                        <div className="text-[10px] text-emerald-300 mt-1">
-                                          Free cancellation
-                                        </div>
-                                      )}
-                                    </div>
-                                    {stay.url ? (
-                                      <a
-                                        href={stay.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="rahi-btn-primary text-[10px] px-3 py-2"
-                                      >
-                                        Book
-                                      </a>
-                                    ) : (
-                                      <span className="text-[10px] text-gray-500">Link unavailable</span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                                  Day {day.day_number}
+                                </button>
+                              ))}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => optimizeDayPlan(selectedDay)}
+                              disabled={optimizingDay || loading || streaming}
+                              className="rahi-btn-secondary text-xs px-4 py-2 disabled:opacity-60"
+                            >
+                              {optimizingDay ? "Optimizing..." : "Optimize day"}
+                            </button>
+                            <span className="text-[11px] text-gray-500">
+                              Uses travel time + weather
+                            </span>
                           </div>
-                        )}
-
-                        <div className="mt-4 flex flex-wrap items-center gap-2">
-                          <span className="text-[10px] text-gray-500 uppercase tracking-[0.2em]">
-                            Free alternatives
-                          </span>
-                          <a
-                            href={hostelworldLink}
-                            target="_blank"
-                            rel="sponsored noreferrer"
-                            className="rahi-btn-ghost text-[10px]"
-                          >
-                            Hostelworld
-                          </a>
-                          <a
-                            href={tripadvisorLink}
-                            target="_blank"
-                            rel="sponsored noreferrer"
-                            className="rahi-btn-ghost text-[10px]"
-                          >
-                            Tripadvisor
-                          </a>
+                          <p className="text-[11px] text-gray-500 mt-2">
+                            {selectedDayWeather?.weather?.[0]?.description
+                              ? `Weather: ${selectedDayWeather.weather[0].description}`
+                              : "Add weather data for smarter ordering."}
+                          </p>
                         </div>
-                      </div>
+                      )}
+
+                      {trip && (
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                              <MessageSquare className="w-4 h-4" /> Group Coordination
+                            </div>
+                            <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                              Local only
+                            </span>
+                          </div>
+                          <div className="grid md:grid-cols-3 gap-3">
+                            <div className="bg-black/20 p-3 rounded-lg">
+                              <p className="text-xs text-gray-400">Members & Split</p>
+                              <div className="mt-2 flex gap-2">
+                                <input
+                                  className="rahi-input px-3 py-2 text-xs"
+                                  placeholder="Add member"
+                                  value={groupMemberInput}
+                                  onChange={(e) => setGroupMemberInput(e.target.value)}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={addGroupMember}
+                                  className="rahi-btn-secondary text-xs px-3 py-2"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                {groupMembers.length > 0 ? (
+                                  groupMembers.map((member) => (
+                                    <div
+                                      key={member}
+                                      className="flex items-center justify-between text-xs text-gray-300"
+                                    >
+                                      <span>{member}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeGroupMember(member)}
+                                        className="text-[10px] text-red-300"
+                                      >
+                                        Remove
+                                      </button>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-[11px] text-gray-500">
+                                    Add members to split the budget.
+                                  </p>
+                                )}
+                              </div>
+                              <div className="mt-3 text-xs text-gray-300">
+                                Total: ₹{formatCurrency(groupBudgetTotal)}
+                              </div>
+                              <div className="text-xs text-gray-300">
+                                Per person: ₹{formatCurrency(groupPerPerson)}
+                              </div>
+                            </div>
+
+                            <div className="bg-black/20 p-3 rounded-lg">
+                              <p className="text-xs text-gray-400">Polls</p>
+                              <div className="mt-2 space-y-2">
+                                <input
+                                  className="rahi-input px-3 py-2 text-xs"
+                                  placeholder="Poll question"
+                                  value={pollQuestion}
+                                  onChange={(e) => setPollQuestion(e.target.value)}
+                                />
+                                <input
+                                  className="rahi-input px-3 py-2 text-xs"
+                                  placeholder="Options (comma separated)"
+                                  value={pollOptionsInput}
+                                  onChange={(e) => setPollOptionsInput(e.target.value)}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={addGroupPoll}
+                                  className="rahi-btn-secondary text-xs px-3 py-2"
+                                >
+                                  Create poll
+                                </button>
+                              </div>
+                              <div className="mt-3 space-y-2 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
+                                {groupPolls.length > 0 ? (
+                                  groupPolls.map((poll) => (
+                                    <div
+                                      key={poll.id}
+                                      className="border border-white/10 rounded-lg p-2"
+                                    >
+                                      <div className="flex items-start justify-between gap-2">
+                                        <p className="text-xs text-white">{poll.question}</p>
+                                        <button
+                                          type="button"
+                                          onClick={() => removeGroupPoll(poll.id)}
+                                          className="text-[10px] text-gray-500"
+                                        >
+                                          Clear
+                                        </button>
+                                      </div>
+                                      <div className="mt-2 flex flex-wrap gap-2">
+                                        {poll.options.map((option) => (
+                                          <button
+                                            key={option.id}
+                                            type="button"
+                                            onClick={() => voteGroupPoll(poll.id, option.id)}
+                                            className="rahi-btn-ghost text-[10px]"
+                                          >
+                                            {option.label} • {option.votes}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))
+                                ) : (
+                                  <p className="text-[11px] text-gray-500">
+                                    Create a poll to decide together.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="bg-black/20 p-3 rounded-lg">
+                              <p className="text-xs text-gray-400">Decision Tracker</p>
+                              <div className="mt-2 flex gap-2">
+                                <input
+                                  className="rahi-input px-3 py-2 text-xs"
+                                  placeholder="Add decision"
+                                  value={decisionInput}
+                                  onChange={(e) => setDecisionInput(e.target.value)}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={addGroupDecision}
+                                  className="rahi-btn-secondary text-xs px-3 py-2"
+                                >
+                                  Add
+                                </button>
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                {groupDecisions.length > 0 ? (
+                                  groupDecisions.map((decision) => (
+                                    <label
+                                      key={decision.id}
+                                      className="flex items-center gap-2 text-xs text-gray-300"
+                                    >
+                                      <input
+                                        type="checkbox"
+                                        className="h-4 w-4 accent-teal-400"
+                                        checked={decision.done}
+                                        onChange={() => toggleGroupDecision(decision.id)}
+                                      />
+                                      <span
+                                        className={
+                                          decision.done
+                                            ? "line-through text-gray-500"
+                                            : ""
+                                        }
+                                      >
+                                        {decision.text}
+                                      </span>
+                                    </label>
+                                  ))
+                                ) : (
+                                  <p className="text-[11px] text-gray-500">
+                                    Track key decisions here.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {trip.days && Array.isArray(trip.days) ? (
                         <TripItinerary

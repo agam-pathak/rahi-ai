@@ -61,12 +61,38 @@ export const DaySchema = z.object({
   activities: z.array(ActivitySchema),
 });
 
+export const GroupPollOptionSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  votes: z.number().int().nonnegative(),
+});
+
+export const GroupPollSchema = z.object({
+  id: z.string(),
+  question: z.string(),
+  options: z.array(GroupPollOptionSchema),
+  createdAt: z.number(),
+});
+
+export const GroupDecisionSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  done: z.boolean(),
+});
+
+export const GroupStateSchema = z.object({
+  members: z.array(z.string()).optional(),
+  polls: z.array(GroupPollSchema).optional(),
+  decisions: z.array(GroupDecisionSchema).optional(),
+});
+
 export const TripMetaSchema = z.object({
   total_estimated_budget: z.number().nonnegative(),
   pace: PaceLevel.optional(),
   primary_vibes: z.array(VibeTag).optional(),
   packing_suggestions: z.array(z.string()).optional(),
   prep_checklist: z.record(z.string(), z.boolean()).optional(),
+  group_state: GroupStateSchema.optional(),
   signature_story: z.string().optional(),
 });
 
