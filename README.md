@@ -37,6 +37,11 @@ Required for features:
 - `GROQ_API_KEY` (AI)
 - `OPENWEATHER_API_KEY` (Weather)
 - `NEXT_PUBLIC_MAPBOX_TOKEN` (Maps)
+- `BOOKINGCOM_API_TOKEN` (Booking.com stays)
+- `BOOKINGCOM_AFFILIATE_ID` (Booking.com stays)
+- `BOOKINGCOM_BASE_URL` (optional, use sandbox URL for testing)
+- `NEXT_PUBLIC_HOSTELWORLD_DEEPLINK_TEMPLATE` (Hostelworld deep link template)
+- `NEXT_PUBLIC_TRIPADVISOR_DEEPLINK_TEMPLATE` (Tripadvisor deep link template)
 
 Recommended:
 - `SUPABASE_SERVICE_ROLE_KEY` (server-only admin fallback)

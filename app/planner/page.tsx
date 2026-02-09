@@ -13,7 +13,7 @@ import {
   MapPin, Calendar, IndianRupee, Compass, Send, 
   Download, Share2, Trash2, History, CloudSun,
   Plane, Sparkles, MessageSquare, Lock, Unlock,
-  ClipboardCheck, PenLine,
+  ClipboardCheck, PenLine, BedDouble, Users,
   Settings, ShieldCheck
 } from "lucide-react"; 
 import RahiBackground from "@/components/RahiBackground";
@@ -99,6 +99,22 @@ type WeatherItem = {
   weather?: { description?: string }[];
 };
 
+type StayTab = "hotels" | "hostels";
+
+type StayResult = {
+  id: number;
+  name: string;
+  price?: number;
+  currency?: string;
+  url?: string;
+  deepLinkUrl?: string;
+  reviewScore?: number;
+  stars?: number;
+  reviewCount?: number;
+  photoUrl?: string;
+  freeCancellation?: boolean;
+};
+
 type VoiceSettings = {
   tts: boolean;
   earcons: boolean;
@@ -126,6 +142,24 @@ export default function PlannerPage() {
   const [durationInput, setDurationInput] = useState(""); // Renamed from 'days' to avoid conflict
   const [interests, setInterests] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Booking Inputs
+  const [checkIn, setCheckIn] = useState("");
+  const [checkOut, setCheckOut] = useState("");
+  const [guests, setGuests] = useState("2");
+  const [rooms, setRooms] = useState("1");
+  const [stayTab, setStayTab] = useState<StayTab>("hotels");
+  const [stayResults, setStayResults] = useState<StayResult[]>([]);
+  const [stayResultsType, setStayResultsType] = useState<StayTab | null>(null);
+  const [stayLoading, setStayLoading] = useState(false);
+  const [stayError, setStayError] = useState<string | null>(null);
+  const [stayQuery, setStayQuery] = useState<{
+    destination: string;
+    checkIn: string;
+    checkOut: string;
+    guests: number;
+    rooms: number;
+  } | null>(null);
   
   // History & Context
   const [history, setHistory] = useState<SavedTrip[]>([]);
@@ -169,6 +203,47 @@ export default function PlannerPage() {
   const geocodeCacheRef = useRef(new Map<string, [number, number]>());
   const geocodeRunRef = useRef<string | null>(null);
   const checklistSaveRef = useRef<number | null>(null);
+  const canSearchStays = Boolean(destination.trim() && checkIn && checkOut);
+  const stayParams = useMemo(
+    () => ({
+      destination: destination.trim(),
+      checkin: checkIn,
+      checkout: checkOut,
+      guests: String(parseStayNumber(guests, 2)),
+      rooms: String(parseStayNumber(rooms, 1)),
+    }),
+    [destination, checkIn, checkOut, guests, rooms]
+  );
+  const hostelworldFallback = useMemo(() => {
+    const trimmed = destination.trim();
+    if (!trimmed) return "https://www.hostelworld.com/hostels/";
+    const slug = slugifyDestination(trimmed);
+    if (!slug) return "https://www.hostelworld.com/hostels/";
+    return `https://www.hostelworld.com/hostels/asia/india/r/${slug}/`;
+  }, [destination]);
+  const tripadvisorFallback = useMemo(() => {
+    const trimmed = destination.trim();
+    if (!trimmed) return "https://www.tripadvisor.com/Search";
+    return `https://www.tripadvisor.com/Search?q=${encodeURIComponent(trimmed)}`;
+  }, [destination]);
+  const hostelworldLink = useMemo(
+    () =>
+      buildDeepLink(
+        process.env.NEXT_PUBLIC_HOSTELWORLD_DEEPLINK_TEMPLATE,
+        hostelworldFallback,
+        stayParams
+      ),
+    [hostelworldFallback, stayParams]
+  );
+  const tripadvisorLink = useMemo(
+    () =>
+      buildDeepLink(
+        process.env.NEXT_PUBLIC_TRIPADVISOR_DEEPLINK_TEMPLATE,
+        tripadvisorFallback,
+        stayParams
+      ),
+    [tripadvisorFallback, stayParams]
+  );
 
   const parseBudget = (value: string) => {
     const cleaned = value.replace(/,/g, "").trim();
@@ -179,6 +254,45 @@ export default function PlannerPage() {
   const formatCurrency = (value: number) => {
     if (!Number.isFinite(value)) return "0";
     return value.toLocaleString("en-IN");
+  };
+
+  const parseStayNumber = (value: string, fallback: number) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return Math.floor(parsed);
+  };
+
+  const formatStayPrice = (value?: number, currency?: string) => {
+    if (!Number.isFinite(value)) return "";
+    const safeCurrency = currency && /^[A-Z]{3}$/.test(currency) ? currency : "INR";
+    try {
+      return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency: safeCurrency,
+        maximumFractionDigits: 0,
+      }).format(value as number);
+    } catch {
+      return `${safeCurrency} ${Math.round(value as number).toLocaleString("en-IN")}`;
+    }
+  };
+
+  const slugifyDestination = (value: string) => {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+  };
+
+  const buildDeepLink = (
+    template: string | undefined,
+    fallback: string,
+    params: Record<string, string>
+  ) => {
+    if (!template) return fallback;
+    return template.replace(/\{(\w+)\}/g, (_, key) =>
+      encodeURIComponent(params[key] ?? "")
+    );
   };
 
   const getActivityCoord = (activity: Activity) => {
@@ -235,6 +349,8 @@ export default function PlannerPage() {
     });
     return defaults;
   }, []);
+
+  const todayISO = useMemo(() => new Date().toISOString().split("T")[0], []);
 
   const mergeChecklist = useCallback(
     (source?: Record<string, boolean>) => {
@@ -456,6 +572,61 @@ export default function PlannerPage() {
       setWeatherError("Weather request failed.");
     } finally {
       setWeatherLoading(false);
+    }
+  };
+
+  const searchStays = async (type: StayTab) => {
+    if (stayLoading) return;
+    const city = destination.trim();
+    if (!city) {
+      showToast("Add a destination first.");
+      return;
+    }
+    if (!checkIn || !checkOut) {
+      showToast("Select check-in and check-out dates.");
+      return;
+    }
+    const adults = parseStayNumber(guests, 2);
+    const roomCount = parseStayNumber(rooms, 1);
+    setStayLoading(true);
+    setStayError(null);
+    setStayResultsType(type);
+    try {
+      const res = await fetch("/api/booking/bookingcom/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          destination: city,
+          checkIn,
+          checkOut,
+          guests: adults,
+          rooms: roomCount,
+          stayType: type,
+        }),
+      });
+      if (!res.ok) {
+        const msg = await parseApiError(res);
+        setStayError(msg || "Stay search failed.");
+        setStayResults([]);
+        return;
+      }
+      const data = await res.json();
+      const results = Array.isArray(data?.results) ? data.results : [];
+      setStayResults(results);
+      setStayQuery({
+        destination: city,
+        checkIn,
+        checkOut,
+        guests: adults,
+        rooms: roomCount,
+      });
+      if (results.length === 0) {
+        setStayError(null);
+      }
+    } catch {
+      setStayError("Stay search failed. Please try again.");
+    } finally {
+      setStayLoading(false);
     }
   };
 
@@ -2234,6 +2405,66 @@ export default function PlannerPage() {
                   />
                 </div>
 
+                <div className="rahi-card p-4 border border-white/10">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="rahi-label">Stay Details (optional)</span>
+                    <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                      Booking
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className={inputContainer}>
+                      <label className={labelStyle}>Check-in</label>
+                      <Calendar className={inputIcon} />
+                      <input
+                        className={inputField}
+                        type="date"
+                        min={todayISO}
+                        value={checkIn}
+                        onChange={(e) => setCheckIn(e.target.value)}
+                      />
+                    </div>
+                    <div className={inputContainer}>
+                      <label className={labelStyle}>Check-out</label>
+                      <Calendar className={inputIcon} />
+                      <input
+                        className={inputField}
+                        type="date"
+                        min={checkIn || todayISO}
+                        value={checkOut}
+                        onChange={(e) => setCheckOut(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                    <div className={inputContainer}>
+                      <label className={labelStyle}>Guests</label>
+                      <Users className={inputIcon} />
+                      <input
+                        className={inputField}
+                        type="number"
+                        min={1}
+                        value={guests}
+                        onChange={(e) => setGuests(e.target.value)}
+                      />
+                    </div>
+                    <div className={inputContainer}>
+                      <label className={labelStyle}>Rooms</label>
+                      <BedDouble className={inputIcon} />
+                      <input
+                        className={inputField}
+                        type="number"
+                        min={1}
+                        value={rooms}
+                        onChange={(e) => setRooms(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-2">
+                    Used to search hotels and hostels on Booking.com.
+                  </p>
+                </div>
+
                 {formError && (
                   <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
                     {formError}
@@ -2833,6 +3064,170 @@ export default function PlannerPage() {
                         )}
                       </div>
 
+                      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                            <BedDouble className="w-4 h-4" /> Book Stays
+                          </div>
+                          <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                            Booking.com
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 mb-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStayTab("hotels");
+                              setStayError(null);
+                            }}
+                            className={`rahi-btn-ghost text-[10px] ${
+                              stayTab === "hotels"
+                                ? "border border-teal-500/40 bg-teal-500/10 text-teal-300"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            Hotels
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStayTab("hostels");
+                              setStayError(null);
+                            }}
+                            className={`rahi-btn-ghost text-[10px] ${
+                              stayTab === "hostels"
+                                ? "border border-teal-500/40 bg-teal-500/10 text-teal-300"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            Hostels / Dorms
+                          </button>
+                          <div className="text-[11px] text-gray-400 ml-auto">
+                            {stayQuery && stayResultsType === stayTab
+                              ? `${stayQuery.checkIn} → ${stayQuery.checkOut}`
+                              : checkIn && checkOut
+                                ? `${checkIn} → ${checkOut}`
+                                : "Add stay dates"}
+                            {" "}• {parseStayNumber(guests, 2)} guests • {parseStayNumber(rooms, 1)} rooms
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => searchStays(stayTab)}
+                            disabled={!canSearchStays || stayLoading}
+                            className="rahi-btn-primary text-xs px-4 py-2 disabled:opacity-60"
+                          >
+                            {stayLoading ? "Searching..." : "Search stays"}
+                          </button>
+                          <span className="text-[11px] text-gray-500">
+                            Deep-link only • Complete booking on Booking.com
+                          </span>
+                        </div>
+
+                        {!canSearchStays && (
+                          <p className="text-[11px] text-gray-500 mt-2">
+                            Add check-in and check-out dates to search stays.
+                          </p>
+                        )}
+
+                        {stayError && (
+                          <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+                            {stayError}
+                          </div>
+                        )}
+
+                        {!stayLoading && stayResultsType !== stayTab && !stayError && (
+                          <p className="text-[11px] text-gray-500 mt-3">
+                            Search to see live {stayTab === "hostels" ? "hostel" : "hotel"} options.
+                          </p>
+                        )}
+
+                        {stayResultsType === stayTab && !stayLoading && !stayError && stayResults.length === 0 && (
+                          <p className="text-[11px] text-gray-500 mt-3">
+                            No stays found. Try different dates or a nearby city.
+                          </p>
+                        )}
+
+                        {stayResultsType === stayTab && stayResults.length > 0 && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4">
+                            {stayResults.map((stay) => {
+                              const priceLabel = formatStayPrice(stay.price, stay.currency);
+                              return (
+                                <div
+                                  key={stay.id}
+                                  className="bg-black/25 border border-white/10 rounded-lg p-4"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <p className="text-sm font-semibold text-white">{stay.name}</p>
+                                      {stay.stars ? (
+                                        <p className="text-[11px] text-gray-400">{stay.stars}★ property</p>
+                                      ) : (
+                                        <p className="text-[11px] text-gray-500">Verified stay</p>
+                                      )}
+                                    </div>
+                                    {stay.reviewScore ? (
+                                      <span className="text-xs text-teal-300">★ {stay.reviewScore.toFixed(1)}</span>
+                                    ) : null}
+                                  </div>
+                                  <div className="mt-3 flex items-center justify-between gap-3">
+                                    <div>
+                                      {priceLabel ? (
+                                        <div className="text-sm font-semibold text-teal-200">{priceLabel}</div>
+                                      ) : (
+                                        <div className="text-xs text-gray-400">Price on Booking.com</div>
+                                      )}
+                                      {stay.freeCancellation && (
+                                        <div className="text-[10px] text-emerald-300 mt-1">
+                                          Free cancellation
+                                        </div>
+                                      )}
+                                    </div>
+                                    {stay.url ? (
+                                      <a
+                                        href={stay.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="rahi-btn-primary text-[10px] px-3 py-2"
+                                      >
+                                        Book
+                                      </a>
+                                    ) : (
+                                      <span className="text-[10px] text-gray-500">Link unavailable</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] text-gray-500 uppercase tracking-[0.2em]">
+                            Free alternatives
+                          </span>
+                          <a
+                            href={hostelworldLink}
+                            target="_blank"
+                            rel="sponsored noreferrer"
+                            className="rahi-btn-ghost text-[10px]"
+                          >
+                            Hostelworld
+                          </a>
+                          <a
+                            href={tripadvisorLink}
+                            target="_blank"
+                            rel="sponsored noreferrer"
+                            className="rahi-btn-ghost text-[10px]"
+                          >
+                            Tripadvisor
+                          </a>
+                        </div>
+                      </div>
+
                       {trip.days && Array.isArray(trip.days) ? (
                         <TripItinerary
                           trip={trip}
@@ -3258,4 +3653,4 @@ export default function PlannerPage() {
   );
 }
 
-// all perfect 
+// all perfect
