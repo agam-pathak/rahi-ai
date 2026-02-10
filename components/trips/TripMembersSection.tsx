@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import AddMemberButton from "./AddMemberButton";
 import TripMembersPanel from "./TripMembersPanel";
@@ -33,6 +34,11 @@ export default function TripMembersSection({
   const [loading, setLoading] = useState(!initialRole);
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const showDebug =
+    searchParams?.get("debug") === "1" || searchParams?.get("debug") === "true";
 
   useEffect(() => {
     let active = true;
@@ -44,6 +50,8 @@ export default function TripMembersSection({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         if (!active) return;
+        setCurrentUserId(null);
+        setOwnerId(null);
         setRole(null);
         setMembers([]);
         setNeedsLogin(true);
@@ -51,6 +59,7 @@ export default function TripMembersSection({
         return;
       }
 
+      setCurrentUserId(user.id);
       setNeedsLogin(false);
 
       const { data: tripData, error: tripError } = await supabase
@@ -62,10 +71,12 @@ export default function TripMembersSection({
       if (tripError || !tripData) {
         if (!active) return;
         setError("Unable to load member access.");
+        setOwnerId(null);
         setLoading(false);
         return;
       }
 
+      setOwnerId(tripData.user_id ?? null);
       let resolvedRole: Role = null;
       if (tripData.user_id === user.id) {
         resolvedRole = "owner";
@@ -128,15 +139,27 @@ export default function TripMembersSection({
         <a href="/login" className="text-teal-300 hover:underline">
           Sign in
         </a>
+        {showDebug && (
+          <div className="mt-2 text-[10px] text-gray-500">
+            Debug: owner {ownerId ? ownerId.slice(0, 8) : "—"} · you{" "}
+            {currentUserId ? currentUserId.slice(0, 8) : "—"}
+          </div>
+        )}
       </div>
     );
   }
 
   if (!role) {
     return (
-      <p className="text-xs text-gray-500">
+      <div className="text-xs text-gray-500">
         You do not have access to collaborators for this trip.
-      </p>
+        {showDebug && (
+          <div className="mt-2 text-[10px] text-gray-500">
+            Debug: owner {ownerId ? ownerId.slice(0, 8) : "—"} · you{" "}
+            {currentUserId ? currentUserId.slice(0, 8) : "—"}
+          </div>
+        )}
+      </div>
     );
   }
 
