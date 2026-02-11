@@ -35,6 +35,7 @@ export default function TripMembersSection({
   const [error, setError] = useState<string | null>(null);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
   const [ownerId, setOwnerId] = useState<string | null>(null);
   const searchParams = useSearchParams();
   const showDebug =
@@ -51,6 +52,7 @@ export default function TripMembersSection({
       if (!user) {
         if (!active) return;
         setCurrentUserId(null);
+        setCurrentUserEmail(null);
         setOwnerId(null);
         setRole(null);
         setMembers([]);
@@ -60,6 +62,7 @@ export default function TripMembersSection({
       }
 
       setCurrentUserId(user.id);
+      setCurrentUserEmail(user.email ?? null);
       setNeedsLogin(false);
 
       const { data: tripData, error: tripError } = await supabase
@@ -152,7 +155,23 @@ export default function TripMembersSection({
   if (!role) {
     return (
       <div className="text-xs text-gray-500">
-        You do not have access to collaborators for this trip.
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+          You are signed in as{" "}
+          <span className="font-semibold text-amber-200">
+            {currentUserEmail || (currentUserId ? currentUserId.slice(0, 8) : "unknown")}
+          </span>{" "}
+          but this trip belongs to another account.
+          <button
+            type="button"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              window.location.href = "/login";
+            }}
+            className="ml-2 rounded-full border border-amber-300/40 px-2 py-0.5 text-[10px] text-amber-100 hover:border-amber-300/70 hover:text-white"
+          >
+            Switch account
+          </button>
+        </div>
         {showDebug && (
           <div className="mt-2 text-[10px] text-gray-500">
             Debug: owner {ownerId ? ownerId.slice(0, 8) : "—"} · you{" "}
