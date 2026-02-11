@@ -23,6 +23,7 @@ type InviteItem = {
 };
 
 export default function TripInvitesPanel({ tripId }: { tripId: string }) {
+  const emailInvitesEnabled = process.env.NEXT_PUBLIC_EMAIL_INVITES_ENABLED === "true";
   const [linkRole, setLinkRole] = useState<InviteRole>("viewer");
   const [linkInvite, setLinkInvite] = useState<string | null>(null);
   const [linkLoading, setLinkLoading] = useState(false);
@@ -190,59 +191,61 @@ export default function TripInvitesPanel({ tripId }: { tripId: string }) {
         {linkError && <p className="mt-2 text-[11px] text-red-400">{linkError}</p>}
       </div>
 
-      <div>
-        <div className="text-[11px] uppercase tracking-wide text-teal-200 font-semibold">
-          Invite by email
-        </div>
-        <div className="mt-2 flex flex-col sm:flex-row gap-2">
-          <input
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="teammate@email.com"
-            className="flex-1 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-[12px] text-gray-200 outline-none"
-          />
-          <select
-            value={emailRole}
-            onChange={(event) => setEmailRole(event.target.value as InviteRole)}
-            className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-gray-200"
-          >
-            <option value="viewer">Viewer</option>
-            <option value="editor">Editor</option>
-          </select>
-          <button
-            type="button"
-            onClick={async () => {
-              const ok = await createInvite(
-                { role: emailRole, email: email.trim(), mode: "email" },
-                setEmailInvite,
-                setEmailLoading,
-                setEmailError
-              );
-              if (ok) setEmail("");
-            }}
-            disabled={emailLoading}
-            className="rounded-md border border-white/10 px-3 py-1 text-[11px] text-gray-200 hover:border-teal-400/40 disabled:opacity-60"
-          >
-            {emailLoading ? "Creating..." : "Create invite"}
-          </button>
-        </div>
-        <p className="mt-2 text-[11px] text-gray-400">
-          Email invites only work for users who sign in with that exact email.
-        </p>
-        {emailInvite && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-300">
-            <span className="truncate max-w-[220px]">{emailInvite}</span>
+      {emailInvitesEnabled && (
+        <div>
+          <div className="text-[11px] uppercase tracking-wide text-teal-200 font-semibold">
+            Invite by email
+          </div>
+          <div className="mt-2 flex flex-col sm:flex-row gap-2">
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="teammate@email.com"
+              className="flex-1 rounded-md border border-white/10 bg-black/30 px-3 py-2 text-[12px] text-gray-200 outline-none"
+            />
+            <select
+              value={emailRole}
+              onChange={(event) => setEmailRole(event.target.value as InviteRole)}
+              className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-gray-200"
+            >
+              <option value="viewer">Viewer</option>
+              <option value="editor">Editor</option>
+            </select>
             <button
               type="button"
-              onClick={() => copyToClipboard(emailInvite)}
-              className="rounded-md border border-white/10 px-2 py-1 text-[10px] text-gray-200 hover:border-teal-400/40"
+              onClick={async () => {
+                const ok = await createInvite(
+                  { role: emailRole, email: email.trim(), mode: "email" },
+                  setEmailInvite,
+                  setEmailLoading,
+                  setEmailError
+                );
+                if (ok) setEmail("");
+              }}
+              disabled={emailLoading}
+              className="rounded-md border border-white/10 px-3 py-1 text-[11px] text-gray-200 hover:border-teal-400/40 disabled:opacity-60"
             >
-              Copy
+              {emailLoading ? "Creating..." : "Create invite"}
             </button>
           </div>
-        )}
-        {emailError && <p className="mt-2 text-[11px] text-red-400">{emailError}</p>}
-      </div>
+          <p className="mt-2 text-[11px] text-gray-400">
+            Email invites only work for users who sign in with that exact email.
+          </p>
+          {emailInvite && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-300">
+              <span className="truncate max-w-[220px]">{emailInvite}</span>
+              <button
+                type="button"
+                onClick={() => copyToClipboard(emailInvite)}
+                className="rounded-md border border-white/10 px-2 py-1 text-[10px] text-gray-200 hover:border-teal-400/40"
+              >
+                Copy
+              </button>
+            </div>
+          )}
+          {emailError && <p className="mt-2 text-[11px] text-red-400">{emailError}</p>}
+        </div>
+      )}
 
       <div>
         <div className="text-[11px] uppercase tracking-wide text-teal-200 font-semibold">
