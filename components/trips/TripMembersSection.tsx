@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import AddMemberButton from "./AddMemberButton";
 import TripMembersPanel from "./TripMembersPanel";
+import TripInvitesPanel from "./TripInvitesPanel";
 
 type Member = {
   user_id: string;
@@ -36,10 +36,6 @@ export default function TripMembersSection({
   const [needsLogin, setNeedsLogin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null);
-  const [ownerId, setOwnerId] = useState<string | null>(null);
-  const searchParams = useSearchParams();
-  const showDebug =
-    searchParams?.get("debug") === "1" || searchParams?.get("debug") === "true";
 
   useEffect(() => {
     let active = true;
@@ -53,7 +49,6 @@ export default function TripMembersSection({
         if (!active) return;
         setCurrentUserId(null);
         setCurrentUserEmail(null);
-        setOwnerId(null);
         setRole(null);
         setMembers([]);
         setNeedsLogin(true);
@@ -80,7 +75,6 @@ export default function TripMembersSection({
 
         const data = await res.json();
         if (!active) return;
-        setOwnerId(data?.owner_id ?? null);
         setRole((data?.role as Role) ?? null);
         setMembers(Array.isArray(data?.members) ? data.members : []);
         setLoading(false);
@@ -111,12 +105,6 @@ export default function TripMembersSection({
         <a href="/login" className="text-teal-300 hover:underline">
           Sign in
         </a>
-        {showDebug && (
-          <div className="mt-2 text-[10px] text-gray-500">
-            Debug: owner {ownerId ? ownerId.slice(0, 8) : "—"} · you{" "}
-            {currentUserId ? currentUserId.slice(0, 8) : "—"}
-          </div>
-        )}
       </div>
     );
   }
@@ -141,27 +129,31 @@ export default function TripMembersSection({
             Switch account
           </button>
         </div>
-        {showDebug && (
-          <div className="mt-2 text-[10px] text-gray-500">
-            Debug: owner {ownerId ? ownerId.slice(0, 8) : "—"} · you{" "}
-            {currentUserId ? currentUserId.slice(0, 8) : "—"}
-          </div>
-        )}
       </div>
     );
   }
 
+  const isOwner = role === "owner";
+
   return (
-    <>
-      {role === "owner" && (
-        <AddMemberButton tripId={tripId} />
+    <div className="space-y-3">
+      {isOwner && (
+        <div className="flex flex-wrap items-center gap-3">
+          <AddMemberButton tripId={tripId} />
+          <span className="text-[11px] text-gray-500">
+            Invite teammates by link or email.
+          </span>
+        </div>
+      )}
+      {isOwner && (
+        <TripInvitesPanel tripId={tripId} />
       )}
       <TripMembersPanel
         tripId={tripId}
         members={members}
-        canManage={role === "owner"}
+        canManage={isOwner}
       />
-      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
-    </>
+      {error && <p className="text-xs text-red-400">{error}</p>}
+    </div>
   );
 }

@@ -80,7 +80,11 @@ export default function TripMembersPanel({ tripId, members, canManage }: Props) 
   return (
     <div className="space-y-2 mt-3">
       {items.length === 0 && (
-        <p className="text-xs text-gray-500">No collaborators yet.</p>
+        <p className="text-xs text-gray-500">
+          {canManage
+            ? "You're the only member right now. Invite someone to collaborate."
+            : "No collaborators yet."}
+        </p>
       )}
       {items.map((member) => (
         <div
