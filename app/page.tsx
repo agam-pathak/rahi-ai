@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion, Variants } from "framer-motion";
@@ -15,6 +15,8 @@ export default function Home() {
   const router = useRouter();
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState<string | null>(null);
   const premiumEase = [0.16, 1, 0.3, 1] as const;
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
@@ -58,6 +60,25 @@ export default function Home() {
   }, [router]);
 
   useEffect(() => {
+    if (!user) return;
+    let active = true;
+    const loadProfile = async () => {
+      try {
+        const res = await fetch("/api/ai/profile");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!active) return;
+        setProfileAvatar(data?.avatar_url || null);
+        setProfileName(data?.name || data?.email || null);
+      } catch {}
+    };
+    loadProfile();
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const stored = window.localStorage.getItem("rahi-voice-settings");
     if (stored) {
@@ -81,6 +102,25 @@ export default function Home() {
     await supabase.auth.signOut();
     router.replace("/login");
   };
+
+  const profileAvatarUrl =
+    profileAvatar || (user?.user_metadata?.avatar_url as string | undefined) || null;
+
+  const profileInitials = useMemo(() => {
+    const raw =
+      profileName ||
+      (user?.user_metadata?.full_name as string | undefined) ||
+      user?.email ||
+      "Rahi";
+    const cleaned = String(raw || "").trim();
+    if (!cleaned) return "RA";
+    const base = cleaned.includes("@") ? cleaned.split("@")[0] : cleaned;
+    const parts = base.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) {
+      return parts[0].slice(0, 2).toUpperCase();
+    }
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  }, [profileName, user]);
 
   const speakResponse = (text: string) => {
     if (!voiceSettings.tts) return;
@@ -218,8 +258,22 @@ export default function Home() {
 
           <div className="flex md:hidden items-center gap-2">
             <ThemeToggle />
-            <a href="/profile" className="rahi-btn-ghost text-[11px] px-3 py-2">
-              Profile
+            <a
+              href="/profile"
+              aria-label="Profile"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 hover:border-teal-400/40"
+            >
+              {profileAvatarUrl ? (
+                <img
+                  src={profileAvatarUrl}
+                  alt="Profile"
+                  className="h-8 w-8 rounded-full object-cover"
+                />
+              ) : (
+                <span className="text-[11px] font-semibold text-gray-200">
+                  {profileInitials}
+                </span>
+              )}
             </a>
             <a href="/planner" className="rahi-btn-primary px-3 py-2 text-xs">
               Plan
@@ -233,7 +287,23 @@ export default function Home() {
           >
             <button onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-teal-400 transition-colors">Features</button>
             <button onClick={() => document.getElementById("community")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-teal-400 transition-colors">Community</button>
-            <a href="/profile" className="hover:text-teal-400 transition-colors">Profile</a>
+            <a
+              href="/profile"
+              aria-label="Profile"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 hover:border-teal-400/40"
+            >
+              {profileAvatarUrl ? (
+                <img
+                  src={profileAvatarUrl}
+                  alt="Profile"
+                  className="h-8 w-8 rounded-full object-cover"
+                />
+              ) : (
+                <span className="text-[11px] font-semibold text-gray-200">
+                  {profileInitials}
+                </span>
+              )}
+            </a>
             <button onClick={logout} className="text-red-400 hover:text-red-300 transition-colors">Logout</button>
             <ThemeToggle />
             <a href="/planner" className="rahi-btn-primary px-5 py-2.5 text-sm">
@@ -646,4 +716,3 @@ function FeatureCard({ icon, title, desc, color, onClick }: any) {
     </motion.div>
   );
 }
-
