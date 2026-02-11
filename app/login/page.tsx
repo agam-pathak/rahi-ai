@@ -1,21 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Loader2, ArrowRight, Plane, CheckCircle2 } from "lucide-react";
 import RahiBackground from "@/components/RahiBackground";
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "signup">("login");
   const premiumEase = [0.16, 1, 0.3, 1] as const;
-  const rawNext = searchParams.get("next");
-  const nextPath = rawNext && rawNext.startsWith("/") ? rawNext : "/";
+  const [nextPath, setNextPath] = useState("/");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const rawNext = params.get("next");
+    setNextPath(rawNext && rawNext.startsWith("/") ? rawNext : "/");
+  }, []);
   
   // Loading state for API call
   const [loading, setLoading] = useState(false);
