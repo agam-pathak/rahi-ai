@@ -237,44 +237,39 @@ export default function Home() {
           <motion.div 
              initial={{ opacity: 0, x: -20 }}
              animate={{ opacity: 1, x: 0 }}
-             className="rahi-logo flex items-center gap-3 cursor-pointer"
+             className="rahi-logo flex items-center gap-3"
           >
-            <div className="rahi-logo-badge">
-              <img
-                src="/brand/rahi-mark.svg"
-                alt="Rahi.AI logo"
-                className="h-9 w-9 rounded-xl border border-white/10 shadow-[0_0_18px_rgba(20,184,166,0.35)]"
-              />
-            </div>
-            <svg
-              className="rahi-wordmark"
-              viewBox="0 0 180 40"
-              role="img"
-              aria-label="Rahi.AI"
-            >
-              <text x="0" y="28">Rahi.AI</text>
-            </svg>
-          </motion.div>
-
-          <div className="flex md:hidden items-center gap-2">
-            <ThemeToggle />
             <a
               href="/profile"
               aria-label="Profile"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 hover:border-teal-400/40"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 ring-2 ring-teal-400/30 hover:ring-teal-400/60 transition"
             >
               {profileAvatarUrl ? (
                 <img
                   src={profileAvatarUrl}
                   alt="Profile"
-                  className="h-8 w-8 rounded-full object-cover"
+                  className="h-10 w-10 rounded-full object-cover"
                 />
               ) : (
-                <span className="text-[11px] font-semibold text-gray-200">
+                <span className="text-[12px] font-semibold text-gray-200">
                   {profileInitials}
                 </span>
               )}
             </a>
+            <a href="/" aria-label="Rahi.AI" className="inline-flex items-center">
+              <svg
+                className="rahi-wordmark"
+                viewBox="0 0 180 40"
+                role="img"
+                aria-hidden="true"
+              >
+                <text x="0" y="28">Rahi.AI</text>
+              </svg>
+            </a>
+          </motion.div>
+
+          <div className="flex md:hidden items-center gap-2">
+            <ThemeToggle />
             <a href="/planner" className="rahi-btn-primary px-3 py-2 text-xs">
               Plan
             </a>
@@ -287,23 +282,6 @@ export default function Home() {
           >
             <button onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-teal-400 transition-colors">Features</button>
             <button onClick={() => document.getElementById("community")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-teal-400 transition-colors">Community</button>
-            <a
-              href="/profile"
-              aria-label="Profile"
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/5 hover:border-teal-400/40"
-            >
-              {profileAvatarUrl ? (
-                <img
-                  src={profileAvatarUrl}
-                  alt="Profile"
-                  className="h-8 w-8 rounded-full object-cover"
-                />
-              ) : (
-                <span className="text-[11px] font-semibold text-gray-200">
-                  {profileInitials}
-                </span>
-              )}
-            </a>
             <button onClick={logout} className="text-red-400 hover:text-red-300 transition-colors">Logout</button>
             <ThemeToggle />
             <a href="/planner" className="rahi-btn-primary px-5 py-2.5 text-sm">
