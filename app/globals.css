@@ -132,8 +132,16 @@ html[data-theme="dark"] .rahi-bg-grid {
   opacity: 0.05;
 }
 
+html[data-theme="dark"] .rahi-bg-map {
+  opacity: 0.04;
+}
+
 html[data-theme="dark"] .rahi-bg-noise {
   opacity: 0.08;
+}
+
+html[data-theme="dark"] .rahi-bg-vignette {
+  opacity: 0.95;
 }
 
 .rahi-bg-base {
@@ -178,6 +186,18 @@ html[data-theme="dark"] .rahi-bg-noise {
   opacity: 0.08;
 }
 
+.rahi-bg-map {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 20px 20px, rgba(20, 184, 166, 0.14) 1px, transparent 1px),
+    radial-gradient(circle at 120px 80px, rgba(56, 189, 248, 0.12) 1px, transparent 1px),
+    radial-gradient(circle at 60px 140px, rgba(34, 211, 238, 0.1) 1px, transparent 1px);
+  background-size: 180px 180px;
+  opacity: 0.07;
+  mix-blend-mode: screen;
+}
+
 .rahi-bg-orb {
   position: absolute;
   width: 320px;
@@ -212,6 +232,19 @@ html[data-theme="dark"] .rahi-bg-noise {
   background-size: 3px 3px;
   opacity: 0.06;
   mix-blend-mode: overlay;
+}
+
+.rahi-bg-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(5, 6, 8, 0) 0%,
+    rgba(5, 6, 8, 0.6) 65%,
+    rgba(5, 6, 8, 0.9) 100%
+  );
+  pointer-events: none;
+  opacity: 0.9;
 }
 
 @media (max-width: 640px) {

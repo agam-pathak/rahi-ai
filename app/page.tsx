@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion, Variants } from "framer-motion";
@@ -17,6 +17,9 @@ export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [navCompact, setNavCompact] = useState(false);
+  const avatarMenuRef = useRef<HTMLDivElement | null>(null);
   const premiumEase = [0.16, 1, 0.3, 1] as const;
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
@@ -77,6 +80,31 @@ export default function Home() {
       active = false;
     };
   }, [user]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      setNavCompact(window.scrollY > 12);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!avatarMenuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!avatarMenuRef.current) return;
+      if (!avatarMenuRef.current.contains(event.target as Node)) {
+        setAvatarMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", handleClick);
+    return () => {
+      window.removeEventListener("mousedown", handleClick);
+    };
+  }, [avatarMenuOpen]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -232,30 +260,89 @@ export default function Home() {
       <RahiBackground />
 
       {/* 2. GLASS NAVBAR */}
-      <nav className="fixed top-0 w-full z-50 border-b border-rahi-border bg-rahi-surface backdrop-blur-xl transition-all duration-300">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 md:h-20 flex items-center justify-between">
+      <nav
+        className={`fixed top-0 w-full z-50 border-b border-rahi-border bg-rahi-surface backdrop-blur-xl transition-all duration-300 ${
+          navCompact ? "shadow-[0_12px_30px_rgba(2,6,23,0.45)] bg-rahi-surface-strong" : ""
+        }`}
+      >
+        <div
+          className={`max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between transition-all duration-300 ${
+            navCompact ? "h-14 md:h-16" : "h-16 md:h-20"
+          }`}
+        >
           <motion.div 
              initial={{ opacity: 0, x: -20 }}
              animate={{ opacity: 1, x: 0 }}
              className="rahi-logo flex items-center gap-3"
           >
-            <a
-              href="/profile"
-              aria-label="Profile"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 ring-2 ring-teal-400/30 hover:ring-teal-400/60 transition"
-            >
-              {profileAvatarUrl ? (
-                <img
-                  src={profileAvatarUrl}
-                  alt="Profile"
-                  className="h-10 w-10 rounded-full object-cover"
-                />
-              ) : (
-                <span className="text-[12px] font-semibold text-gray-200">
-                  {profileInitials}
-                </span>
+            <div className="relative" ref={avatarMenuRef}>
+              <button
+                type="button"
+                aria-label="Profile menu"
+                aria-haspopup="menu"
+                aria-expanded={avatarMenuOpen}
+                onClick={() => setAvatarMenuOpen((prev) => !prev)}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 ring-2 ring-teal-400/30 hover:ring-teal-400/60 transition"
+              >
+                {profileAvatarUrl ? (
+                  <img
+                    src={profileAvatarUrl}
+                    alt="Profile"
+                    className="h-10 w-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <span className="text-[12px] font-semibold text-gray-200">
+                    {profileInitials}
+                  </span>
+                )}
+              </button>
+              {avatarMenuOpen && (
+                <div className="absolute left-0 mt-3 w-64 rounded-2xl border border-white/10 bg-[#0b1220]/95 p-3 shadow-xl backdrop-blur">
+                  <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                    <div className="h-10 w-10 rounded-full border border-white/10 bg-white/5 overflow-hidden">
+                      {profileAvatarUrl ? (
+                        <img src={profileAvatarUrl} alt="Profile" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="h-full w-full flex items-center justify-center text-xs text-gray-300">
+                          {profileInitials}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-sm font-semibold text-white">
+                        {profileName || user?.email || "Rahi Traveler"}
+                      </div>
+                      <div className="text-[11px] text-gray-400">Account</div>
+                    </div>
+                  </div>
+                  <div className="py-3 space-y-1">
+                    <a
+                      href="/profile"
+                      className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/5"
+                    >
+                      Profile
+                      <ArrowRight className="h-4 w-4 text-gray-500" />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={logout}
+                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-rose-200 hover:bg-white/5"
+                    >
+                      Logout
+                      <ArrowRight className="h-4 w-4 text-rose-200/70" />
+                    </button>
+                  </div>
+                  <div className="border-t border-white/10 pt-3">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-gray-500">
+                      Appearance
+                    </div>
+                    <div className="mt-2 origin-left scale-90">
+                      <ThemeToggle />
+                    </div>
+                  </div>
+                </div>
               )}
-            </a>
+            </div>
             <a href="/" aria-label="Rahi.AI" className="inline-flex items-center">
               <svg
                 className="rahi-wordmark"
@@ -269,7 +356,6 @@ export default function Home() {
           </motion.div>
 
           <div className="flex md:hidden items-center gap-2">
-            <ThemeToggle />
             <a href="/planner" className="rahi-btn-primary px-3 py-2 text-xs">
               Plan
             </a>
@@ -278,12 +364,21 @@ export default function Home() {
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-300"
+            className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-200"
           >
-            <button onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-teal-400 transition-colors">Features</button>
-            <button onClick={() => document.getElementById("community")?.scrollIntoView({ behavior: "smooth" })} className="hover:text-teal-400 transition-colors">Community</button>
-            <button onClick={logout} className="text-red-400 hover:text-red-300 transition-colors">Logout</button>
-            <ThemeToggle />
+            <button
+              onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
+              className="hover:text-teal-300 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-400/60 focus-visible:outline-offset-4"
+            >
+              Features
+            </button>
+            <button
+              onClick={() => document.getElementById("community")?.scrollIntoView({ behavior: "smooth" })}
+              className="hover:text-teal-300 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-400/60 focus-visible:outline-offset-4"
+            >
+              Community
+            </button>
+            <button onClick={logout} className="text-rose-200 hover:text-rose-300 transition-colors">Logout</button>
             <a href="/planner" className="rahi-btn-primary px-5 py-2.5 text-sm">
               Start Planning
             </a>
@@ -322,7 +417,7 @@ export default function Home() {
           {/* Massive Headline */}
           <motion.h1 
             variants={itemVariants}
-            className="text-4xl sm:text-6xl md:text-8xl font-display font-black tracking-tight leading-tight"
+            className="text-4xl sm:text-5xl md:text-7xl font-display font-black tracking-tight leading-[0.98]"
           >
             Travel Smart with <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-300 drop-shadow-[0_0_35px_rgba(45,212,191,0.4)]">
@@ -337,6 +432,25 @@ export default function Home() {
           >
             Plan smarter trips. Save money. Travel confidently with your personal AI companion.
           </motion.p>
+
+          <motion.div
+            variants={itemVariants}
+            className="flex flex-wrap items-center justify-center gap-3 pt-4"
+          >
+            <button
+              className="rahi-btn-primary px-6 py-3 text-sm"
+              onClick={() => router.push("/planner?mode=ai")}
+            >
+              Start Planning <ArrowRight className="h-4 w-4" />
+            </button>
+            <button
+              className="rahi-btn-secondary group px-6 py-3 text-sm"
+              onClick={() => router.push("/planner?mode=ai&sample=1")}
+            >
+              See Sample Trip
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </button>
+          </motion.div>
         </motion.div>
 
         {/* Scroll Indicator */}
