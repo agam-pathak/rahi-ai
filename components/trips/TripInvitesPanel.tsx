@@ -97,17 +97,21 @@ export default function TripInvitesPanel({ tripId }: { tripId: string }) {
       if (!res.ok) {
         throw new Error(data.error || "Unable to create invite");
       }
-      if (!data.inviteUrl || !data.invite) {
+      if (!data.inviteUrl || !data.invite?.id || !data.invite?.token) {
         throw new Error("Invite link unavailable.");
       }
+      const newInvite: InviteItem = {
+        id: data.invite.id,
+        token: data.invite.token,
+        role: data.invite.role === "editor" ? "editor" : "viewer",
+        email: data.invite.email ?? null,
+        created_at: data.invite.created_at ?? new Date().toISOString(),
+        expires_at: data.invite.expires_at ?? null,
+        accepted_at: data.invite.accepted_at ?? null,
+        inviteUrl: data.inviteUrl,
+      };
       setInvite(data.inviteUrl);
-      setInvites((prev) => [
-        {
-          ...data.invite,
-          inviteUrl: data.inviteUrl,
-        },
-        ...prev,
-      ]);
+      setInvites((prev) => [newInvite, ...prev]);
       if (data.emailSent) {
         setCopied("Email sent.");
       } else if (data.emailError && payload.mode === "email") {
