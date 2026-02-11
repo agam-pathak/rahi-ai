@@ -15,9 +15,18 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Rahi.AI – Travel Smart with AI",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://rahi.ai"),
+  title: {
+    default: "Rahi.AI – Travel Smart with AI",
+    template: "%s | Rahi.AI",
+  },
   description:
     "Rahi.AI helps students and backpackers plan smarter trips within budget using AI-powered itineraries.",
+  applicationName: "Rahi.AI",
+  category: "travel",
+  alternates: {
+    canonical: "/",
+  },
 
   icons: {
     icon: "/icons/favicon.ico",
@@ -29,9 +38,17 @@ export const metadata: Metadata = {
     title: "Rahi.AI – Travel Smart with AI",
     description:
       "Plan smarter trips. Save money. Travel confidently with AI.",
-    url: "https://rahi.ai",
+    url: "/",
     siteName: "Rahi.AI",
     type: "website",
+    images: [
+      {
+        url: "/og/rahi-og.svg",
+        width: 1200,
+        height: 630,
+        alt: "Rahi.AI – Travel Smart with AI",
+      },
+    ],
   },
 
   twitter: {
@@ -39,6 +56,7 @@ export const metadata: Metadata = {
     title: "Rahi.AI – Travel Smart with AI",
     description:
       "AI-powered trip planning for students and backpackers.",
+    images: ["/og/rahi-og.svg"],
   },
 
   robots: {

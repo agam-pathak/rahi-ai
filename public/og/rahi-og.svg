@@ -1,0 +1,30 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0b0f19"/>
+      <stop offset="50%" stop-color="#0a1f2b"/>
+      <stop offset="100%" stop-color="#0b0d12"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(840 180) rotate(120) scale(420 280)">
+      <stop stop-color="#22d3ee" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#0b0d12" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <circle cx="220" cy="140" r="70" fill="#14b8a6" fill-opacity="0.15"/>
+  <circle cx="260" cy="170" r="40" fill="#38bdf8" fill-opacity="0.18"/>
+  <text x="120" y="260" fill="#e2e8f0" font-family="Fraunces, Georgia, serif" font-size="78" font-weight="700">
+    Travel Smart with
+  </text>
+  <text x="120" y="340" fill="#5eead4" font-family="Fraunces, Georgia, serif" font-size="86" font-weight="800">
+    Rahi.AI
+  </text>
+  <text x="120" y="410" fill="#94a3b8" font-family="Space Grotesk, Arial, sans-serif" font-size="28">
+    AI-powered itineraries for students and backpackers.
+  </text>
+  <rect x="120" y="450" width="220" height="52" rx="26" fill="#14b8a6"/>
+  <text x="145" y="484" fill="#0b0d12" font-family="Space Grotesk, Arial, sans-serif" font-size="22" font-weight="700">
+    Start Planning
+  </text>
+</svg>
