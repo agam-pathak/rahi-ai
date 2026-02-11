@@ -65,61 +65,30 @@ export default function TripMembersSection({
       setCurrentUserEmail(user.email ?? null);
       setNeedsLogin(false);
 
-      const { data: tripData, error: tripError } = await supabase
-        .from("trips")
-        .select("user_id")
-        .eq("id", tripId)
-        .single();
+      try {
+        const res = await fetch(`/api/trips/${tripId}/members`);
+        if (!res.ok) {
+          if (res.status === 401) {
+            setNeedsLogin(true);
+            setRole(null);
+            setMembers([]);
+            setLoading(false);
+            return;
+          }
+          throw new Error("Unable to load member access.");
+        }
 
-      if (tripError || !tripData) {
+        const data = await res.json();
         if (!active) return;
-        setError("Unable to load member access.");
-        setOwnerId(null);
+        setOwnerId(data?.owner_id ?? null);
+        setRole((data?.role as Role) ?? null);
+        setMembers(Array.isArray(data?.members) ? data.members : []);
         setLoading(false);
-        return;
-      }
-
-      setOwnerId(tripData.user_id ?? null);
-      let resolvedRole: Role = null;
-      if (tripData.user_id === user.id) {
-        resolvedRole = "owner";
-      } else {
-        const { data: memberRow } = await supabase
-          .from("trip_members")
-          .select("role")
-          .eq("trip_id", tripId)
-          .eq("user_id", user.id)
-          .maybeSingle();
-        resolvedRole = (memberRow?.role as Role) ?? null;
-      }
-
-      if (!active) return;
-      setRole(resolvedRole);
-
-      if (!resolvedRole) {
-        setMembers([]);
+      } catch (err: any) {
+        if (!active) return;
+        setError(err?.message || "Unable to load member access.");
         setLoading(false);
-        return;
       }
-
-      const { data: memberRows, error: membersError } = await supabase
-        .from("trip_members")
-        .select("user_id, role, created_at")
-        .eq("trip_id", tripId);
-
-      if (!active) return;
-      if (membersError) {
-        setError("Unable to load members.");
-        setLoading(false);
-        return;
-      }
-
-      const normalized = (memberRows ?? []).map((member) => ({
-        ...member,
-        profiles: null,
-      })) as Member[];
-      setMembers(normalized);
-      setLoading(false);
     };
 
     loadMembers();
