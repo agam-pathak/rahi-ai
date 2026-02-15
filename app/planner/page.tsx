@@ -30,6 +30,72 @@ const PREMIUM_CHECKLIST = [
   { id: "connect", label: "Local SIM / roaming ready" },
 ];
 const ACTIVITY_TYPE_COUNT = 5;
+type IndiaTemplatePreset = {
+  id: string;
+  title: string;
+  destination: string;
+  days: number;
+  budget: number;
+  interests: string;
+  vibe: string;
+};
+
+const INDIA_TEMPLATE_PRESETS: IndiaTemplatePreset[] = [
+  {
+    id: "goa-weekend",
+    title: "Goa Weekend",
+    destination: "Goa",
+    days: 3,
+    budget: 12000,
+    interests: "beach, nightlife, cafes, local food",
+    vibe: "beach",
+  },
+  {
+    id: "manali-adventure",
+    title: "Manali Adventure",
+    destination: "Manali",
+    days: 4,
+    budget: 15000,
+    interests: "mountains, trekking, views, adventure sports",
+    vibe: "adventure",
+  },
+  {
+    id: "jaipur-heritage",
+    title: "Jaipur Heritage",
+    destination: "Jaipur",
+    days: 3,
+    budget: 11000,
+    interests: "forts, culture, shopping, rajasthani food",
+    vibe: "cultural",
+  },
+  {
+    id: "rishikesh-retreat",
+    title: "Rishikesh Retreat",
+    destination: "Rishikesh",
+    days: 3,
+    budget: 9000,
+    interests: "yoga, riverfront, temples, cafes",
+    vibe: "chill",
+  },
+  {
+    id: "srinagar-scenic",
+    title: "Srinagar Scenic",
+    destination: "Srinagar",
+    days: 4,
+    budget: 14000,
+    interests: "lakes, gardens, local cuisine, culture",
+    vibe: "nature",
+  },
+  {
+    id: "varanasi-spiritual",
+    title: "Varanasi Spiritual",
+    destination: "Varanasi",
+    days: 2,
+    budget: 7000,
+    interests: "ghats, temples, local food, evening aarti",
+    vibe: "cultural",
+  },
+];
 
 // --- TYPES ---
 
@@ -74,6 +140,8 @@ type TripMeta = {
   prep_checklist?: Record<string, boolean>;
   group_state?: GroupState;
   signature_story?: string;
+  revision?: number;
+  last_saved_at?: string;
 };
 
 // Full Trip Structure
@@ -132,6 +200,13 @@ type VoiceSettings = {
   lang: "en-IN" | "hi-IN";
 };
 
+type GeneratePlanOverrides = {
+  destination?: string;
+  budget?: string;
+  durationInput?: string;
+  interests?: string;
+};
+
 export default function PlannerPage() {
   const router = useRouter();
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
@@ -151,6 +226,7 @@ export default function PlannerPage() {
   const [budget, setBudget] = useState("");
   const [durationInput, setDurationInput] = useState(""); // Renamed from 'days' to avoid conflict
   const [interests, setInterests] = useState("");
+  const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Group Coordination
@@ -208,6 +284,12 @@ export default function PlannerPage() {
   const geocodeRunRef = useRef<string | null>(null);
   const checklistSaveRef = useRef<number | null>(null);
   const groupSaveRef = useRef<number | null>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const saveInFlightRef = useRef(false);
+  const queuedTripRef = useRef<Trip | null>(null);
+  const lastSavedSnapshotRef = useRef<string>("");
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "saved" | "dirty" | "saving" | "error" | "conflict">("idle");
   const groupStorageKey =
     trip?.id
       ? `rahi-group-${trip.id}`
@@ -277,6 +359,27 @@ export default function PlannerPage() {
       },
     };
   };
+
+  const serializeTripForSync = useCallback((value: Trip | null) => {
+    if (!value?.id) return "";
+    return JSON.stringify({
+      id: value.id,
+      days: value.days,
+      meta: value.meta,
+    });
+  }, []);
+
+  const stampTripSyncMeta = useCallback(
+    (value: Trip, revision: number, savedAt: string) => ({
+      ...value,
+      meta: {
+        ...value.meta,
+        revision,
+        last_saved_at: savedAt,
+      },
+    }),
+    []
+  );
 
   const checklistDefaults = useMemo(() => {
     const defaults: Record<string, boolean> = {};
@@ -529,6 +632,11 @@ export default function PlannerPage() {
 
   const plannerMode = (mode || "ai") as keyof typeof MODE_CONFIG;
   const tripType = (type || "general") as keyof typeof TYPE_HINTS;
+  const activeIndiaTemplate = useMemo(
+    () =>
+      INDIA_TEMPLATE_PRESETS.find((template) => template.id === activeTemplateId) ?? null,
+    [activeTemplateId]
+  );
   const premiumPreview = searchParams.get("premium") === "1";
   const pdfIsPremium = isPremium || premiumPreview;
   const pdfDebug = searchParams.get("pdfdebug") === "1";
@@ -601,8 +709,23 @@ export default function PlannerPage() {
       if (toastTimeoutRef.current) {
         window.clearTimeout(toastTimeoutRef.current);
       }
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges && !savingChanges) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+    };
+  }, [hasUnsavedChanges, savingChanges]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1130,38 +1253,202 @@ export default function PlannerPage() {
     });
   };
 
-  const persistTripResult = async (updatedTrip: Trip) => {
-    if (!updatedTrip.id) return;
-    setSavingChanges(true);
-    try {
-      const res = await fetch("/api/trips/update", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: updatedTrip.id,
-          days: updatedTrip.days,
-          meta: updatedTrip.meta,
-        }),
-      });
-
-      if (!res.ok) {
-        const msg = await parseApiError(res);
-        showToast(msg);
+  const persistTripResult = useCallback(
+    async (updatedTrip: Trip, options?: { reason?: "manual" | "autosave" | "queued" }) => {
+      if (!updatedTrip.id) return;
+      const snapshot = serializeTripForSync(updatedTrip);
+      if (!snapshot) return;
+      if (snapshot === lastSavedSnapshotRef.current) {
+        setHasUnsavedChanges(false);
+        setSyncStatus("saved");
+        return;
       }
-    } catch {
-      showToast("Failed to save changes.");
-    } finally {
-      setSavingChanges(false);
+
+      if (saveInFlightRef.current) {
+        queuedTripRef.current = updatedTrip;
+        return;
+      }
+
+      const expectedRevision =
+        Number.isInteger(updatedTrip.meta?.revision) && Number(updatedTrip.meta.revision) >= 0
+          ? Number(updatedTrip.meta.revision)
+          : 0;
+
+      saveInFlightRef.current = true;
+      setSavingChanges(true);
+      setSyncStatus("saving");
+
+      try {
+        const res = await fetch("/api/trips/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: updatedTrip.id,
+            days: updatedTrip.days,
+            meta: updatedTrip.meta,
+            expectedRevision,
+          }),
+        });
+
+        if (res.status === 409) {
+          let payload: any = null;
+          try {
+            payload = await res.json();
+          } catch {}
+
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(
+              `rahi-conflict-draft-${updatedTrip.id}`,
+              JSON.stringify({
+                captured_at: new Date().toISOString(),
+                trip: updatedTrip,
+              })
+            );
+          }
+
+          const serverTrip = payload?.serverTrip;
+          if (serverTrip && typeof serverTrip === "object") {
+            const serverRevision =
+              Number.isInteger(payload?.serverRevision) && Number(payload.serverRevision) >= 0
+                ? Number(payload.serverRevision)
+                : 0;
+            const serverSavedAt =
+              typeof serverTrip?.meta?.last_saved_at === "string"
+                ? serverTrip.meta.last_saved_at
+                : new Date().toISOString();
+            const nextServerTrip = stampTripSyncMeta(serverTrip as Trip, serverRevision, serverSavedAt);
+            setTrip(nextServerTrip);
+            updateHistoryEntry(nextServerTrip);
+            lastSavedSnapshotRef.current = serializeTripForSync(nextServerTrip);
+            setHasUnsavedChanges(false);
+          }
+
+          setSyncStatus("conflict");
+          showToast(
+            "Trip changed in another session. Latest server version loaded. Local draft saved on this device."
+          );
+          return;
+        }
+
+        if (!res.ok) {
+          const msg = await parseApiError(res);
+          setSyncStatus("error");
+          setHasUnsavedChanges(true);
+          showToast(options?.reason === "manual" ? msg : `Autosave failed: ${msg}`);
+          return;
+        }
+
+        let payload: any = null;
+        try {
+          payload = await res.json();
+        } catch {}
+
+        const revision =
+          Number.isInteger(payload?.revision) && Number(payload.revision) >= 0
+            ? Number(payload.revision)
+            : expectedRevision + 1;
+        const savedAt =
+          typeof payload?.saved_at === "string" ? payload.saved_at : new Date().toISOString();
+        const syncedTrip = stampTripSyncMeta(updatedTrip, revision, savedAt);
+
+        lastSavedSnapshotRef.current = serializeTripForSync(syncedTrip);
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(`rahi-unsaved-trip-${updatedTrip.id}`);
+          window.localStorage.removeItem(`rahi-conflict-draft-${updatedTrip.id}`);
+        }
+
+        setTrip((prev) => {
+          if (!prev || prev.id !== updatedTrip.id) return prev;
+          const prevSnapshot = serializeTripForSync(prev);
+          if (prevSnapshot && prevSnapshot !== snapshot) {
+            return stampTripSyncMeta(prev, revision, savedAt);
+          }
+          return syncedTrip;
+        });
+        updateHistoryEntry(syncedTrip);
+        setHasUnsavedChanges(false);
+        setSyncStatus("saved");
+      } catch {
+        setSyncStatus("error");
+        setHasUnsavedChanges(true);
+        showToast("Failed to save changes.");
+      } finally {
+        saveInFlightRef.current = false;
+        setSavingChanges(false);
+        const queued = queuedTripRef.current;
+        queuedTripRef.current = null;
+        if (queued) {
+          void persistTripResult(queued, { reason: "queued" });
+        }
+      }
+    },
+    [parseApiError, serializeTripForSync, showToast, stampTripSyncMeta, updateHistoryEntry]
+  );
+
+  useEffect(() => {
+    if (!trip?.id) {
+      lastSavedSnapshotRef.current = "";
+      setHasUnsavedChanges(false);
+      setSyncStatus("idle");
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+      return;
     }
-  };
+
+    const snapshot = serializeTripForSync(trip);
+    if (!snapshot) return;
+
+    if (!lastSavedSnapshotRef.current) {
+      lastSavedSnapshotRef.current = snapshot;
+      setHasUnsavedChanges(false);
+      setSyncStatus("saved");
+      return;
+    }
+
+    if (snapshot === lastSavedSnapshotRef.current) {
+      setHasUnsavedChanges(false);
+      if (!saveInFlightRef.current) {
+        setSyncStatus("saved");
+      }
+      return;
+    }
+
+    setHasUnsavedChanges(true);
+    if (!saveInFlightRef.current) {
+      setSyncStatus("dirty");
+    }
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        `rahi-unsaved-trip-${trip.id}`,
+        JSON.stringify({
+          captured_at: new Date().toISOString(),
+          trip,
+        })
+      );
+    }
+
+    if (streaming) return;
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+    autosaveTimerRef.current = window.setTimeout(() => {
+      void persistTripResult(trip, { reason: "autosave" });
+    }, 1200);
+  }, [trip, streaming, persistTripResult, serializeTripForSync]);
 
   // --- CORE GENERATION LOGIC ---
-  const generatePlan = async () => {
+  const generatePlan = async (overrides?: GeneratePlanOverrides) => {
     setStreamError(null);
-    const daysNum = Number(durationInput);
-    const budgetNum = parseBudget(budget);
+    const destinationValue = (overrides?.destination ?? destination).trim();
+    const durationValue = (overrides?.durationInput ?? durationInput).trim();
+    const budgetValue = (overrides?.budget ?? budget).trim();
+    const interestsValue = (overrides?.interests ?? interests).trim();
+    const daysNum = Number(durationValue);
+    const budgetNum = parseBudget(budgetValue);
 
-    if (!destination.trim()) {
+    if (!destinationValue) {
       setFormError("Please enter a destination.");
       return;
     }
@@ -1173,7 +1460,7 @@ export default function PlannerPage() {
       setFormError("Please enter a valid budget.");
       return;
     }
-    if (!interests.trim()) {
+    if (!interestsValue) {
       setFormError("Please add at least one interest.");
       return;
     }
@@ -1183,7 +1470,7 @@ export default function PlannerPage() {
     setStreamError(null);
     // Initialize empty trip structure
     setTrip({
-      destination,
+      destination: destinationValue,
       days: [],
       meta: { total_estimated_budget: budgetNum },
       is_public: true
@@ -1196,10 +1483,10 @@ export default function PlannerPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          destination,
+          destination: destinationValue,
           days: daysNum,
           budget: budgetNum,
-          interests
+          interests: interestsValue
         })
       });
 
@@ -1278,7 +1565,7 @@ export default function PlannerPage() {
       // Construct Final Object for History
       const finalTrip: Trip = applyBudgetToTrip({
         id: tripId || undefined,
-        destination,
+        destination: destinationValue,
         days: accumulatedDays,
         meta: accumulatedMeta,
         share_code: shareCode,
@@ -1290,11 +1577,13 @@ export default function PlannerPage() {
         return;
       }
 
+      setTrip(finalTrip);
+
       const savedEntry: SavedTrip = {
-        destination,
-        daysInput: durationInput,
-        budgetInput: budget,
-        interestsInput: interests,
+        destination: destinationValue,
+        daysInput: durationValue,
+        budgetInput: budgetValue,
+        interestsInput: interestsValue,
         tripData: finalTrip,
         time: Date.now(),
       };
@@ -1304,7 +1593,7 @@ export default function PlannerPage() {
       setHistory(updated);
       localStorage.setItem("trip_history", JSON.stringify(updated));
 
-      await fetchWeather(destination, Number(durationInput));
+      await fetchWeather(destinationValue, Number(durationValue));
 
     } catch (e) {
       console.error(e);
@@ -1312,6 +1601,31 @@ export default function PlannerPage() {
       setStreaming(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const applyIndiaTemplate = (template: IndiaTemplatePreset, autoGenerate = false) => {
+    if (autoGenerate && (loading || streaming)) {
+      showToast("Planning is already running.");
+      return;
+    }
+    const nextDuration = String(template.days);
+    const nextBudget = String(template.budget);
+    setDestination(template.destination);
+    setDurationInput(nextDuration);
+    setBudget(nextBudget);
+    setInterests(template.interests);
+    setActiveTemplateId(template.id);
+    setFormError(null);
+    showToast(`${template.title} template loaded.`);
+
+    if (autoGenerate) {
+      void generatePlan({
+        destination: template.destination,
+        durationInput: nextDuration,
+        budget: nextBudget,
+        interests: template.interests,
+      });
     }
   };
 
@@ -2011,6 +2325,24 @@ export default function PlannerPage() {
   const displayBudget =
     (totalFromMeta > 0 ? totalFromMeta : totalFromActivities) ||
     parseBudget(budget);
+  const syncStatusLabel =
+    syncStatus === "saving"
+      ? "Saving..."
+      : syncStatus === "dirty"
+        ? "Unsaved changes"
+        : syncStatus === "saved"
+          ? "All changes saved"
+          : syncStatus === "error"
+            ? "Save failed"
+            : syncStatus === "conflict"
+              ? "Sync conflict handled"
+              : "";
+  const syncStatusClass =
+    syncStatus === "error" || syncStatus === "conflict"
+      ? "text-red-300"
+      : syncStatus === "dirty"
+        ? "text-amber-300"
+        : "text-teal-300/80";
   const packingSuggestions = useMemo(() => {
     const list = trip?.meta?.packing_suggestions ?? [];
     return list.filter(Boolean).slice(0, 6);
@@ -2579,6 +2911,50 @@ export default function PlannerPage() {
               </div>
 
               <div className="space-y-6">
+                <div className="rahi-card p-4 border border-white/10">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className={labelStyle}>India Template Packs</span>
+                    <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                      Quick Start
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {INDIA_TEMPLATE_PRESETS.map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => applyIndiaTemplate(template)}
+                        className={`rounded-xl border px-3 py-2 text-left transition ${
+                          activeTemplateId === template.id
+                            ? "border-teal-400/70 bg-teal-500/15"
+                            : "border-white/10 bg-black/20 hover:border-teal-500/40 hover:bg-white/5"
+                        }`}
+                      >
+                        <p className="text-sm font-semibold text-white">{template.title}</p>
+                        <p className="text-[11px] text-gray-300">
+                          {template.destination} • {template.days}D • ₹{formatCurrency(template.budget)}
+                        </p>
+                        <p className="text-[10px] text-gray-500 capitalize">{template.vibe}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={loading || streaming}
+                    onClick={() => {
+                      if (!activeIndiaTemplate) {
+                        showToast("Select a template first.");
+                        return;
+                      }
+                      applyIndiaTemplate(activeIndiaTemplate, true);
+                    }}
+                    className="mt-3 w-full rahi-btn-secondary text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Use Selected Template + Generate
+                  </button>
+                </div>
+
                 <div className={inputContainer}>
                   <label className={labelStyle}>Where to?</label>
                   <MapPin className={inputIcon} />
@@ -2586,7 +2962,10 @@ export default function PlannerPage() {
                     className={inputField}
                     placeholder="E.g., Goa, Manali, Jaipur"
                     value={destination}
-                    onChange={(e) => setDestination(e.target.value)}
+                    onChange={(e) => {
+                      setDestination(e.target.value);
+                      setActiveTemplateId(null);
+                    }}
                   />
                 </div>
 
@@ -2598,7 +2977,10 @@ export default function PlannerPage() {
                        className={inputField}
                        placeholder="10000"
                        value={budget}
-                       onChange={(e) => setBudget(e.target.value)}
+                       onChange={(e) => {
+                         setBudget(e.target.value);
+                         setActiveTemplateId(null);
+                       }}
                      />
                    </div>
                    <div className={inputContainer}>
@@ -2608,7 +2990,10 @@ export default function PlannerPage() {
                        className={inputField}
                        placeholder="Days"
                        value={durationInput}
-                       onChange={(e) => setDurationInput(e.target.value)}
+                       onChange={(e) => {
+                         setDurationInput(e.target.value);
+                         setActiveTemplateId(null);
+                       }}
                      />
                    </div>
                 </div>
@@ -2620,7 +3005,10 @@ export default function PlannerPage() {
                     className={inputField}
                     placeholder="E.g., Beach, Trekking, Party"
                     value={interests}
-                    onChange={(e) => setInterests(e.target.value)}
+                    onChange={(e) => {
+                      setInterests(e.target.value);
+                      setActiveTemplateId(null);
+                    }}
                   />
                 </div>
 
@@ -2631,7 +3019,7 @@ export default function PlannerPage() {
                 )}
 
                 <button
-                  onClick={generatePlan}
+                  onClick={() => void generatePlan()}
                   disabled={loading}
                   className="w-full mt-2 rahi-btn-primary py-4 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -2782,10 +3170,22 @@ export default function PlannerPage() {
                        </p>
                      </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      {savingChanges && (
-                        <span className="text-xs text-teal-300/80 animate-pulse">
-                          Saving...
+                      {trip.id && syncStatusLabel && (
+                        <span
+                          className={`text-xs ${syncStatusClass} ${
+                            syncStatus === "saving" ? "animate-pulse" : ""
+                          }`}
+                        >
+                          {syncStatusLabel}
                         </span>
+                      )}
+                      {trip.id && hasUnsavedChanges && !savingChanges && (
+                        <button
+                          onClick={() => void persistTripResult(trip, { reason: "manual" })}
+                          className="rahi-btn-secondary text-xs px-3 py-1.5"
+                        >
+                          Save now
+                        </button>
                       )}
                       {isPremium ? (
                         <button

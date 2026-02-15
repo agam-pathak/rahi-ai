@@ -178,7 +178,14 @@ export async function POST(req: Request) {
       );
     }
 
-    const finalTrip = validation.data;
+    const finalTrip = {
+      ...validation.data,
+      meta: {
+        ...validation.data.meta,
+        revision: 0,
+        last_saved_at: new Date().toISOString(),
+      },
+    };
 
     /* ---------- 7. Save to Supabase ---------- */
     const isShareCodeAvailable = async (code: string) => {

@@ -168,7 +168,14 @@ export async function POST(req: Request) {
           return;
         }
 
-        const finalTrip = validation.data;
+        const finalTrip = {
+          ...validation.data,
+          meta: {
+            ...validation.data.meta,
+            revision: 0,
+            last_saved_at: new Date().toISOString(),
+          },
+        };
         const isShareCodeAvailable = async (code: string) => {
           const { data, error } = await dataClient
             .from("trips")

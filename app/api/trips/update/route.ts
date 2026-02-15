@@ -36,10 +36,19 @@ export async function POST(req: Request) {
       );
     }
 
-    const { id, days, meta } = body || {};
+    const { id, days, meta, expectedRevision, force } = body || {};
     if (!id || (!Array.isArray(days) && !meta)) {
       return NextResponse.json(
         { error: "Invalid payload" },
+        { status: 400 }
+      );
+    }
+    if (
+      expectedRevision !== undefined &&
+      (!Number.isInteger(expectedRevision) || Number(expectedRevision) < 0)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid expectedRevision" },
         { status: 400 }
       );
     }
@@ -83,6 +92,24 @@ export async function POST(req: Request) {
       );
     }
 
+    const currentRevision =
+      Number.isInteger(result?.meta?.revision) && Number(result.meta.revision) >= 0
+        ? Number(result.meta.revision)
+        : 0;
+
+    const shouldForce = force === true;
+    if (!shouldForce && expectedRevision !== undefined && expectedRevision !== currentRevision) {
+      return NextResponse.json(
+        {
+          error: "Trip changed in another session.",
+          code: "SYNC_CONFLICT",
+          serverRevision: currentRevision,
+          serverTrip: result,
+        },
+        { status: 409 }
+      );
+    }
+
     if (Array.isArray(days)) {
       const normalizedDays = [...days]
         .sort((a: any, b: any) => (a.day_number ?? 0) - (b.day_number ?? 0))
@@ -95,8 +122,21 @@ export async function POST(req: Request) {
     }
 
     if (meta && typeof meta === "object") {
-      result.meta = { ...result.meta, ...meta };
+      const {
+        revision: _ignoredRevision,
+        last_saved_at: _ignoredLastSavedAt,
+        ...safeMeta
+      } = meta;
+      result.meta = { ...result.meta, ...safeMeta };
     }
+
+    const nextRevision = currentRevision + 1;
+    const savedAt = new Date().toISOString();
+    result.meta = {
+      ...result.meta,
+      revision: nextRevision,
+      last_saved_at: savedAt,
+    };
 
     const validation = TripSchema.safeParse(result);
     if (!validation.success) {
@@ -126,7 +166,11 @@ export async function POST(req: Request) {
     console.info(
       `[trip] update id=${id} days=${validation.data.days.length} activities=${activityCount}`
     );
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      revision: nextRevision,
+      saved_at: savedAt,
+    });
   } catch (err) {
     console.error("Trip update error:", err);
     return NextResponse.json(

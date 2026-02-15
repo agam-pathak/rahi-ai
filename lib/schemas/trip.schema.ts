@@ -94,6 +94,8 @@ export const TripMetaSchema = z.object({
   prep_checklist: z.record(z.string(), z.boolean()).optional(),
   group_state: GroupStateSchema.optional(),
   signature_story: z.string().optional(),
+  revision: z.number().int().nonnegative().optional(),
+  last_saved_at: z.string().datetime().optional(),
 });
 
 /* ---------- Canonical Trip ---------- */
