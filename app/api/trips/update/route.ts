@@ -61,7 +61,7 @@ export async function POST(req: Request) {
 
     if (tripError || !trip) {
       return NextResponse.json(
-        { error: "Trip not found" },
+        { error: "Trip not found", code: "TRIP_NOT_FOUND" },
         { status: 404 }
       );
     }

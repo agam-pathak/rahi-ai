@@ -1290,6 +1290,47 @@ export default function PlannerPage() {
           }),
         });
 
+        if (res.status === 404) {
+          const localFallbackTrip: Trip = {
+            ...updatedTrip,
+            id: undefined,
+            share_code: undefined,
+            is_public: true,
+            meta: {
+              ...updatedTrip.meta,
+              revision: 0,
+            },
+          };
+          setTrip((prev) =>
+            prev?.id === updatedTrip.id ? localFallbackTrip : prev
+          );
+          setHistory((prev) => {
+            const next = prev.map((entry) => {
+              const sameById =
+                entry.tripData?.id &&
+                updatedTrip.id &&
+                entry.tripData.id === updatedTrip.id;
+              const sameByShare =
+                entry.tripData?.share_code &&
+                updatedTrip.share_code &&
+                entry.tripData.share_code === updatedTrip.share_code;
+              if (!sameById && !sameByShare) return entry;
+              return { ...entry, tripData: localFallbackTrip };
+            });
+            if (typeof window !== "undefined") {
+              window.localStorage.setItem("trip_history", JSON.stringify(next));
+            }
+            return next;
+          });
+          lastSavedSnapshotRef.current = "";
+          setHasUnsavedChanges(false);
+          setSyncStatus("idle");
+          showToast(
+            "Cloud trip record not found. This copy is local-only now. Generate again to save online."
+          );
+          return;
+        }
+
         if (res.status === 409) {
           let payload: any = null;
           try {
