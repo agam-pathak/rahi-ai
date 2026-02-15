@@ -397,16 +397,17 @@ export default function Home() {
           animate="visible"
           className="relative z-10 max-w-4xl space-y-8"
         >
-          <motion.div variants={itemVariants} className="mx-auto flex justify-center">
-            <div className="relative">
-            <div className="absolute inset-0 rounded-3xl bg-teal-500/20 blur-xl" />
-            <img
-              src="/brand/rahi-mark.svg"
-              alt="Rahi.AI"
-              className="relative h-16 w-16 rounded-3xl border border-white/10 shadow-[0_0_24px_rgba(20,184,166,0.35)]"
-            />
-          </div>
-        </motion.div>
+          <motion.div variants={itemVariants} className="mx-auto w-full max-w-5xl">
+            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_28px_70px_rgba(2,6,23,0.55)]">
+              <div className="absolute inset-0 bg-gradient-to-br from-teal-500/20 via-transparent to-cyan-400/10 pointer-events-none" />
+              <img
+                src="/brand/Gemini_Generated_Image_pzz4qupzz4qupzz4.png"
+                alt="Rahi.AI neon brand art"
+                className="relative w-full h-auto max-h-[440px] object-contain bg-[#070d18]"
+                loading="eager"
+              />
+            </div>
+          </motion.div>
           {/* The "Future of Travel" Badge */}
           <motion.div variants={itemVariants} className="inline-block">
             <span className="py-1 px-4 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold tracking-wider uppercase backdrop-blur-md">
