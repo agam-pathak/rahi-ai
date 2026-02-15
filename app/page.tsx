@@ -270,11 +270,55 @@ export default function Home() {
             navCompact ? "h-14 md:h-16" : "h-16 md:h-20"
           }`}
         >
-          <motion.div 
-             initial={{ opacity: 0, x: -20 }}
-             animate={{ opacity: 1, x: 0 }}
-             className="rahi-logo flex items-center gap-3"
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="rahi-logo"
           >
+            <a href="/" aria-label="Rahi.AI" className="inline-flex items-center gap-3">
+              <span className="rahi-logo-badge h-11 w-11 rounded-2xl border border-white/10 bg-black/40">
+                <img
+                  src="/brand/rahi-mark.svg"
+                  alt="Rahi.AI mark"
+                  className="h-10 w-10"
+                />
+              </span>
+              <svg
+                className="rahi-wordmark"
+                viewBox="0 0 180 40"
+                role="img"
+                aria-hidden="true"
+              >
+                <text x="0" y="28">Rahi.AI</text>
+              </svg>
+            </a>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 md:gap-6 text-sm font-medium text-gray-200"
+          >
+            <div className="hidden md:flex items-center gap-8">
+              <button
+                onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
+                className="hover:text-teal-300 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-400/60 focus-visible:outline-offset-4"
+              >
+                Features
+              </button>
+              <button
+                onClick={() => document.getElementById("community")?.scrollIntoView({ behavior: "smooth" })}
+                className="hover:text-teal-300 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-400/60 focus-visible:outline-offset-4"
+              >
+                Community
+              </button>
+            </div>
+
+            <a href="/planner" className="rahi-btn-secondary px-3 py-2 text-xs md:px-5 md:py-2.5 md:text-sm border-white/20">
+              <span className="md:hidden">Plan</span>
+              <span className="hidden md:inline">Start Planning</span>
+            </a>
+
             <div className="relative" ref={avatarMenuRef}>
               <button
                 type="button"
@@ -297,7 +341,7 @@ export default function Home() {
                 )}
               </button>
               {avatarMenuOpen && (
-                <div className="absolute left-0 mt-3 w-64 rounded-2xl border border-white/10 bg-[#0b1220]/95 p-3 shadow-xl backdrop-blur">
+                <div className="absolute right-0 mt-3 w-64 rounded-2xl border border-white/10 bg-[#0b1220]/95 p-3 shadow-xl backdrop-blur">
                   <div className="flex items-center gap-3 pb-3 border-b border-white/10">
                     <div className="h-10 w-10 rounded-full border border-white/10 bg-white/5 overflow-hidden">
                       {profileAvatarUrl ? (
@@ -343,45 +387,6 @@ export default function Home() {
                 </div>
               )}
             </div>
-            <a href="/" aria-label="Rahi.AI" className="inline-flex items-center">
-              <svg
-                className="rahi-wordmark"
-                viewBox="0 0 180 40"
-                role="img"
-                aria-hidden="true"
-              >
-                <text x="0" y="28">Rahi.AI</text>
-              </svg>
-            </a>
-          </motion.div>
-
-          <div className="flex md:hidden items-center gap-2">
-            <a href="/planner" className="rahi-btn-primary px-3 py-2 text-xs">
-              Plan
-            </a>
-          </div>
-
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-200"
-          >
-            <button
-              onClick={() => document.getElementById("features")?.scrollIntoView({ behavior: "smooth" })}
-              className="hover:text-teal-300 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-400/60 focus-visible:outline-offset-4"
-            >
-              Features
-            </button>
-            <button
-              onClick={() => document.getElementById("community")?.scrollIntoView({ behavior: "smooth" })}
-              className="hover:text-teal-300 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-400/60 focus-visible:outline-offset-4"
-            >
-              Community
-            </button>
-            <button onClick={logout} className="text-rose-200 hover:text-rose-300 transition-colors">Logout</button>
-            <a href="/planner" className="rahi-btn-primary px-5 py-2.5 text-sm">
-              Start Planning
-            </a>
           </motion.div>
         </div>
       </nav>
@@ -444,19 +449,17 @@ export default function Home() {
             </motion.div>
           </div>
 
-          <motion.div variants={itemVariants} className="w-full max-w-3xl mx-auto lg:ml-auto">
-            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_28px_70px_rgba(2,6,23,0.55)]">
-              <div className="absolute inset-0 bg-gradient-to-br from-teal-500/20 via-transparent to-cyan-400/10 pointer-events-none" />
+          <motion.div variants={itemVariants} className="w-full max-w-[560px] mx-auto lg:ml-auto">
+            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/35 shadow-[0_18px_45px_rgba(2,6,23,0.45)]">
+              <div className="absolute inset-0 bg-gradient-to-br from-teal-500/15 via-transparent to-cyan-400/10 pointer-events-none" />
+              <div className="absolute inset-0 bg-black/15 pointer-events-none" />
               <div className="aspect-[16/10]">
                 <img
                   src="/brand/Gemini_Generated_Image_pzz4qupzz4qupzz4.png"
                   alt="Rahi.AI neon brand art"
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover brightness-90"
                   loading="eager"
                 />
-              </div>
-              <div className="absolute left-4 bottom-4 rounded-full border border-white/10 bg-black/55 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-teal-200">
-                Brand Preview
               </div>
             </div>
           </motion.div>
