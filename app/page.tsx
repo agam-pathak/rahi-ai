@@ -341,7 +341,12 @@ export default function Home() {
                 )}
               </button>
               {avatarMenuOpen && (
-                <div className="absolute right-0 mt-3 w-64 rounded-2xl border border-white/10 bg-[#0b1220]/95 p-3 shadow-xl backdrop-blur">
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="absolute right-0 mt-3 w-64 rounded-2xl border border-white/10 bg-[#0b1220]/95 p-3 shadow-xl backdrop-blur"
+                >
                   <div className="flex items-center gap-3 pb-3 border-b border-white/10">
                     <div className="h-10 w-10 rounded-full border border-white/10 bg-white/5 overflow-hidden">
                       {profileAvatarUrl ? (
@@ -384,7 +389,7 @@ export default function Home() {
                       <ThemeToggle />
                     </div>
                   </div>
-                </div>
+                </motion.div>
               )}
             </div>
           </motion.div>
@@ -392,7 +397,7 @@ export default function Home() {
       </nav>
 
       {/* 3. HERO SECTION */}
-      <section className="relative z-20 min-h-screen px-4 pt-24 md:pt-20 pb-16 flex items-center">
+      <section className="relative z-20 min-h-screen px-4 pt-20 md:pt-16 pb-10 md:pb-12 flex items-center">
         <div className="rahi-hero-watermark" aria-hidden="true">
           <span>RAHI.AI</span>
         </div>
@@ -400,9 +405,9 @@ export default function Home() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="relative z-10 w-full max-w-7xl mx-auto grid lg:grid-cols-[1.05fr_0.95fr] gap-10 lg:gap-14 items-center"
+          className="relative z-10 w-full max-w-7xl mx-auto grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-12 items-center"
         >
-          <div className="space-y-8 text-center lg:text-left">
+          <div className="space-y-6 text-center lg:text-left">
             {/* The "Future of Travel" Badge */}
             <motion.div variants={itemVariants} className="inline-block">
               <span className="py-1 px-4 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold tracking-wider uppercase backdrop-blur-md">
@@ -447,9 +452,27 @@ export default function Home() {
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
               </button>
             </motion.div>
+
+            <motion.div
+              variants={itemVariants}
+              className="flex flex-wrap items-center justify-center lg:justify-start gap-3 text-xs md:text-sm text-gray-400 pt-1"
+            >
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-teal-400" />
+                AI plans
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
+                Budget smart
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                Student friendly
+              </span>
+            </motion.div>
           </div>
 
-          <motion.div variants={itemVariants} className="w-full max-w-[560px] mx-auto lg:ml-auto">
+          <motion.div variants={itemVariants} className="w-full max-w-[530px] mx-auto lg:ml-auto">
             <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/35 shadow-[0_18px_45px_rgba(2,6,23,0.45)]">
               <div className="absolute inset-0 bg-gradient-to-br from-teal-500/15 via-transparent to-cyan-400/10 pointer-events-none" />
               <div className="absolute inset-0 bg-black/15 pointer-events-none" />
@@ -457,7 +480,7 @@ export default function Home() {
                 <img
                   src="/brand/Gemini_Generated_Image_pzz4qupzz4qupzz4.png"
                   alt="Rahi.AI neon brand art"
-                  className="h-full w-full object-cover brightness-90"
+                  className="h-full w-full object-cover brightness-[0.86]"
                   loading="eager"
                 />
               </div>
