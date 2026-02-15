@@ -386,8 +386,8 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* 3. HERO SECTION (Restored the specific styling you liked) */}
-      <section className="relative z-20 flex flex-col items-center justify-center min-h-screen px-4 text-center pt-24 md:pt-20">
+      {/* 3. HERO SECTION */}
+      <section className="relative z-20 min-h-screen px-4 pt-24 md:pt-20 pb-16 flex items-center">
         <div className="rahi-hero-watermark" aria-hidden="true">
           <span>RAHI.AI</span>
         </div>
@@ -395,62 +395,70 @@ export default function Home() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="relative z-10 max-w-4xl space-y-8"
+          className="relative z-10 w-full max-w-7xl mx-auto grid lg:grid-cols-[1.05fr_0.95fr] gap-10 lg:gap-14 items-center"
         >
-          <motion.div variants={itemVariants} className="mx-auto w-full max-w-5xl">
+          <div className="space-y-8 text-center lg:text-left">
+            {/* The "Future of Travel" Badge */}
+            <motion.div variants={itemVariants} className="inline-block">
+              <span className="py-1 px-4 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold tracking-wider uppercase backdrop-blur-md">
+                The Future of Travel
+              </span>
+            </motion.div>
+
+            {/* Massive Headline */}
+            <motion.h1
+              variants={itemVariants}
+              className="text-4xl sm:text-5xl md:text-6xl xl:text-7xl font-display font-black tracking-tight leading-[0.98]"
+            >
+              Travel Smart with <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-300 drop-shadow-[0_0_35px_rgba(45,212,191,0.4)]">
+                Rahi.AI
+              </span>
+            </motion.h1>
+
+            {/* Subtext */}
+            <motion.p
+              variants={itemVariants}
+              className="text-lg md:text-2xl text-gray-300 max-w-2xl mx-auto lg:mx-0 leading-relaxed"
+            >
+              Plan smarter trips. Save money. Travel confidently with your personal AI companion.
+            </motion.p>
+
+            <motion.div
+              variants={itemVariants}
+              className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-2"
+            >
+              <button
+                className="rahi-btn-primary px-6 py-3 text-sm"
+                onClick={() => router.push("/planner?mode=ai")}
+              >
+                Start Planning <ArrowRight className="h-4 w-4" />
+              </button>
+              <button
+                className="rahi-btn-secondary group px-6 py-3 text-sm"
+                onClick={() => router.push("/planner?mode=ai&sample=1")}
+              >
+                See Sample Trip
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              </button>
+            </motion.div>
+          </div>
+
+          <motion.div variants={itemVariants} className="w-full max-w-3xl mx-auto lg:ml-auto">
             <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/40 shadow-[0_28px_70px_rgba(2,6,23,0.55)]">
               <div className="absolute inset-0 bg-gradient-to-br from-teal-500/20 via-transparent to-cyan-400/10 pointer-events-none" />
-              <img
-                src="/brand/Gemini_Generated_Image_pzz4qupzz4qupzz4.png"
-                alt="Rahi.AI neon brand art"
-                className="relative w-full h-auto max-h-[440px] object-contain bg-[#070d18]"
-                loading="eager"
-              />
+              <div className="aspect-[16/10]">
+                <img
+                  src="/brand/Gemini_Generated_Image_pzz4qupzz4qupzz4.png"
+                  alt="Rahi.AI neon brand art"
+                  className="h-full w-full object-cover"
+                  loading="eager"
+                />
+              </div>
+              <div className="absolute left-4 bottom-4 rounded-full border border-white/10 bg-black/55 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-teal-200">
+                Brand Preview
+              </div>
             </div>
-          </motion.div>
-          {/* The "Future of Travel" Badge */}
-          <motion.div variants={itemVariants} className="inline-block">
-            <span className="py-1 px-4 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold tracking-wider uppercase backdrop-blur-md">
-              The Future of Travel
-            </span>
-          </motion.div>
-
-          {/* Massive Headline */}
-          <motion.h1 
-            variants={itemVariants}
-            className="text-4xl sm:text-5xl md:text-7xl font-display font-black tracking-tight leading-[0.98]"
-          >
-            Travel Smart with <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-cyan-300 drop-shadow-[0_0_35px_rgba(45,212,191,0.4)]">
-              Rahi.AI
-            </span>
-          </motion.h1>
-
-          {/* Subtext */}
-          <motion.p 
-            variants={itemVariants}
-            className="text-lg md:text-2xl text-gray-300 max-w-2xl mx-auto leading-relaxed"
-          >
-            Plan smarter trips. Save money. Travel confidently with your personal AI companion.
-          </motion.p>
-
-          <motion.div
-            variants={itemVariants}
-            className="flex flex-wrap items-center justify-center gap-3 pt-4"
-          >
-            <button
-              className="rahi-btn-primary px-6 py-3 text-sm"
-              onClick={() => router.push("/planner?mode=ai")}
-            >
-              Start Planning <ArrowRight className="h-4 w-4" />
-            </button>
-            <button
-              className="rahi-btn-secondary group px-6 py-3 text-sm"
-              onClick={() => router.push("/planner?mode=ai&sample=1")}
-            >
-              See Sample Trip
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </button>
           </motion.div>
         </motion.div>
 
@@ -459,7 +467,7 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1, y: [0, 10, 0] }}
           transition={{ delay: 2, duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute bottom-10"
+          className="absolute bottom-10 left-1/2 -translate-x-1/2"
         >
           <div className="flex flex-col items-center gap-2 text-gray-400 text-sm">
             <span>Scroll to explore</span>
