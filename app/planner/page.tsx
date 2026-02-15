@@ -97,6 +97,60 @@ const INDIA_TEMPLATE_PRESETS: IndiaTemplatePreset[] = [
   },
 ];
 
+const TEMPLATE_CARD_STYLES: Record<
+  string,
+  {
+    glow: string;
+    accent: string;
+    badge: string;
+    badgeTone: string;
+    chipTone: string;
+  }
+> = {
+  beach: {
+    glow: "from-cyan-500/25 via-sky-500/10 to-transparent",
+    accent: "text-cyan-200",
+    badge: "Weekend pick",
+    badgeTone: "bg-cyan-500/15 border-cyan-400/40 text-cyan-200",
+    chipTone: "bg-cyan-500/12 text-cyan-100 border-cyan-300/30",
+  },
+  adventure: {
+    glow: "from-orange-500/20 via-amber-500/10 to-transparent",
+    accent: "text-amber-200",
+    badge: "High energy",
+    badgeTone: "bg-amber-500/15 border-amber-400/40 text-amber-200",
+    chipTone: "bg-amber-500/12 text-amber-100 border-amber-300/30",
+  },
+  cultural: {
+    glow: "from-fuchsia-500/20 via-violet-500/10 to-transparent",
+    accent: "text-fuchsia-200",
+    badge: "Culture rich",
+    badgeTone: "bg-fuchsia-500/15 border-fuchsia-400/40 text-fuchsia-200",
+    chipTone: "bg-fuchsia-500/12 text-fuchsia-100 border-fuchsia-300/30",
+  },
+  chill: {
+    glow: "from-emerald-500/20 via-teal-500/10 to-transparent",
+    accent: "text-emerald-200",
+    badge: "Easy pace",
+    badgeTone: "bg-emerald-500/15 border-emerald-400/40 text-emerald-200",
+    chipTone: "bg-emerald-500/12 text-emerald-100 border-emerald-300/30",
+  },
+  nature: {
+    glow: "from-lime-500/18 via-emerald-500/10 to-transparent",
+    accent: "text-lime-200",
+    badge: "Scenic route",
+    badgeTone: "bg-lime-500/15 border-lime-400/40 text-lime-200",
+    chipTone: "bg-lime-500/12 text-lime-100 border-lime-300/30",
+  },
+  default: {
+    glow: "from-teal-500/20 via-cyan-500/10 to-transparent",
+    accent: "text-teal-200",
+    badge: "Popular",
+    badgeTone: "bg-teal-500/15 border-teal-400/40 text-teal-200",
+    chipTone: "bg-teal-500/12 text-teal-100 border-teal-300/30",
+  },
+};
+
 // --- TYPES ---
 
 type Location = {
@@ -2959,25 +3013,67 @@ export default function PlannerPage() {
                       Quick Start
                     </span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {INDIA_TEMPLATE_PRESETS.map((template) => (
-                      <button
-                        key={template.id}
-                        type="button"
-                        onClick={() => applyIndiaTemplate(template)}
-                        className={`rounded-xl border px-3 py-2 text-left transition ${
-                          activeTemplateId === template.id
-                            ? "border-teal-400/70 bg-teal-500/15"
-                            : "border-white/10 bg-black/20 hover:border-teal-500/40 hover:bg-white/5"
-                        }`}
-                      >
-                        <p className="text-sm font-semibold text-white">{template.title}</p>
-                        <p className="text-[11px] text-gray-300">
-                          {template.destination} • {template.days}D • ₹{formatCurrency(template.budget)}
-                        </p>
-                        <p className="text-[10px] text-gray-500 capitalize">{template.vibe}</p>
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {INDIA_TEMPLATE_PRESETS.map((template) => {
+                      const isActive = activeTemplateId === template.id;
+                      const style =
+                        TEMPLATE_CARD_STYLES[template.vibe] || TEMPLATE_CARD_STYLES.default;
+                      return (
+                        <div
+                          key={template.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => applyIndiaTemplate(template)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              applyIndiaTemplate(template);
+                            }
+                          }}
+                          className={`group relative overflow-hidden rounded-xl border p-3 text-left transition cursor-pointer ${
+                            isActive
+                              ? "border-teal-300/70 bg-white/[0.07] shadow-[0_0_0_1px_rgba(20,184,166,0.2),0_10px_24px_rgba(10,25,48,0.45)]"
+                              : "border-white/10 bg-black/25 hover:border-teal-500/45 hover:bg-white/[0.05]"
+                          }`}
+                        >
+                          <div
+                            className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${style.glow} opacity-80`}
+                          />
+                          <div className="relative z-10 space-y-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-semibold text-white">{template.title}</p>
+                              <span
+                                className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${style.badgeTone}`}
+                              >
+                                {style.badge}
+                              </span>
+                            </div>
+                            <p className={`text-[11px] ${style.accent}`}>
+                              {template.destination} • {template.days}D • ₹{formatCurrency(template.budget)}
+                            </p>
+                            <div className="flex items-center justify-between gap-2">
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[10px] capitalize ${style.chipTone}`}
+                              >
+                                {template.vibe}
+                              </span>
+                              <button
+                                type="button"
+                                disabled={loading || streaming}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  applyIndiaTemplate(template, true);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/35 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:border-teal-300/60 hover:text-teal-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                Generate
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                   <button
                     type="button"
@@ -2989,7 +3085,7 @@ export default function PlannerPage() {
                       }
                       applyIndiaTemplate(activeIndiaTemplate, true);
                     }}
-                    className="mt-3 w-full rahi-btn-secondary text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="mt-3 w-full rahi-btn-secondary text-xs disabled:opacity-60 disabled:cursor-not-allowed border-teal-300/25 bg-gradient-to-r from-teal-500/15 to-cyan-500/10"
                   >
                     <Sparkles className="w-4 h-4" />
                     Use Selected Template + Generate
