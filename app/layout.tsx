@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, Fraunces } from "next/font/google";
 import "./globals.css";
+import AppBackButton from "@/components/AppBackButton";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -74,6 +75,7 @@ export default function RootLayout({
     <html lang="en" className={`${spaceGrotesk.variable} ${fraunces.variable}`}>
       <body className="bg-gradient-to-br from-black via-slate-950 to-slate-900 text-white antialiased">
         {children}
+        <AppBackButton />
       </body>
     </html>
   );
