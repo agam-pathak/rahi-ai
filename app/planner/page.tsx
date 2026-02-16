@@ -3028,7 +3028,7 @@ export default function PlannerPage() {
                 <h2 className="text-xl font-display font-bold text-white">Trip Details</h2>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-5">
                 <div className="rahi-card p-4 border border-white/10">
                   <div className="flex items-center justify-between mb-3">
                     <span className={labelStyle}>India Template Packs</span>
@@ -3041,7 +3041,7 @@ export default function PlannerPage() {
                     </button>
                   </div>
                   <div className={`${showAllTemplates ? "max-h-[272px] overflow-y-auto pr-1 custom-scrollbar" : ""}`}>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-2.5 gap-y-3">
                     {visibleTemplatePacks.map((template) => {
                       const isActive = activeTemplateId === template.id;
                       const style =
@@ -3058,7 +3058,7 @@ export default function PlannerPage() {
                               applyIndiaTemplate(template);
                             }
                           }}
-                          className={`group relative overflow-hidden rounded-xl border p-2.5 text-left transition cursor-pointer ${
+                          className={`group relative overflow-hidden rounded-xl border p-3 min-h-[134px] text-left transition cursor-pointer ${
                             isActive
                               ? "border-teal-300/70 bg-white/[0.07] shadow-[0_0_0_1px_rgba(20,184,166,0.2),0_10px_24px_rgba(10,25,48,0.45)]"
                               : "border-white/10 bg-black/25 hover:border-teal-500/45 hover:bg-white/[0.05]"
@@ -3067,7 +3067,7 @@ export default function PlannerPage() {
                           <div
                             className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${style.glow} opacity-80`}
                           />
-                          <div className="relative z-10 space-y-2">
+                          <div className="relative z-10 space-y-2.5">
                             <div className="flex items-start justify-between gap-2">
                               <p className="text-sm font-semibold text-white">{template.title}</p>
                               <span
@@ -3090,12 +3090,12 @@ export default function PlannerPage() {
                                 disabled={loading || streaming}
                                 onClick={(event) => {
                                   event.stopPropagation();
-                                  applyIndiaTemplate(template, true);
+                                  applyIndiaTemplate(template, false);
                                 }}
                                 className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/35 px-2.5 py-1 text-[10px] font-semibold text-white transition hover:border-teal-300/60 hover:text-teal-100 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Sparkles className="h-3.5 w-3.5" />
-                                Generate
+                                Use
                               </button>
                             </div>
                           </div>
@@ -3112,12 +3112,12 @@ export default function PlannerPage() {
                         showToast("Select a template first.");
                         return;
                       }
-                      applyIndiaTemplate(activeIndiaTemplate, true);
+                      applyIndiaTemplate(activeIndiaTemplate, false);
                     }}
-                    className="mt-3 w-full rahi-btn-secondary text-xs disabled:opacity-60 disabled:cursor-not-allowed border-teal-300/25 bg-gradient-to-r from-teal-500/15 to-cyan-500/10"
+                    className="mt-3 w-full rahi-btn-secondary text-xs disabled:opacity-60 disabled:cursor-not-allowed border-white/20"
                   >
-                    <Sparkles className="w-4 h-4" />
-                    {activeIndiaTemplate ? `Generate ${activeIndiaTemplate.title}` : "Use Selected Template + Generate"}
+                    <Compass className="w-4 h-4" />
+                    {activeIndiaTemplate ? `Use ${activeIndiaTemplate.title}` : "Use Selected Template"}
                   </button>
                 </div>
 
