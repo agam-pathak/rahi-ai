@@ -108,42 +108,42 @@ const TEMPLATE_CARD_STYLES: Record<
   }
 > = {
   beach: {
-    glow: "from-cyan-500/25 via-sky-500/10 to-transparent",
+    glow: "from-cyan-500/20 via-sky-500/8 to-transparent",
     accent: "text-cyan-200",
     badge: "Weekend pick",
     badgeTone: "bg-cyan-500/15 border-cyan-400/40 text-cyan-200",
     chipTone: "bg-cyan-500/12 text-cyan-100 border-cyan-300/30",
   },
   adventure: {
-    glow: "from-orange-500/20 via-amber-500/10 to-transparent",
+    glow: "from-orange-500/17 via-amber-500/8 to-transparent",
     accent: "text-amber-200",
     badge: "High energy",
     badgeTone: "bg-amber-500/15 border-amber-400/40 text-amber-200",
     chipTone: "bg-amber-500/12 text-amber-100 border-amber-300/30",
   },
   cultural: {
-    glow: "from-fuchsia-500/20 via-violet-500/10 to-transparent",
+    glow: "from-fuchsia-500/17 via-violet-500/8 to-transparent",
     accent: "text-fuchsia-200",
     badge: "Culture rich",
     badgeTone: "bg-fuchsia-500/15 border-fuchsia-400/40 text-fuchsia-200",
     chipTone: "bg-fuchsia-500/12 text-fuchsia-100 border-fuchsia-300/30",
   },
   chill: {
-    glow: "from-emerald-500/20 via-teal-500/10 to-transparent",
+    glow: "from-emerald-500/17 via-teal-500/8 to-transparent",
     accent: "text-emerald-200",
     badge: "Easy pace",
     badgeTone: "bg-emerald-500/15 border-emerald-400/40 text-emerald-200",
     chipTone: "bg-emerald-500/12 text-emerald-100 border-emerald-300/30",
   },
   nature: {
-    glow: "from-lime-500/18 via-emerald-500/10 to-transparent",
+    glow: "from-lime-500/15 via-emerald-500/8 to-transparent",
     accent: "text-lime-200",
     badge: "Scenic route",
     badgeTone: "bg-lime-500/15 border-lime-400/40 text-lime-200",
     chipTone: "bg-lime-500/12 text-lime-100 border-lime-300/30",
   },
   default: {
-    glow: "from-teal-500/20 via-cyan-500/10 to-transparent",
+    glow: "from-teal-500/17 via-cyan-500/8 to-transparent",
     accent: "text-teal-200",
     badge: "Popular",
     badgeTone: "bg-teal-500/15 border-teal-400/40 text-teal-200",
@@ -281,6 +281,7 @@ export default function PlannerPage() {
   const [durationInput, setDurationInput] = useState(""); // Renamed from 'days' to avoid conflict
   const [interests, setInterests] = useState("");
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
+  const [showAllTemplates, setShowAllTemplates] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Group Coordination
@@ -691,6 +692,28 @@ export default function PlannerPage() {
       INDIA_TEMPLATE_PRESETS.find((template) => template.id === activeTemplateId) ?? null,
     [activeTemplateId]
   );
+  const visibleTemplatePacks = useMemo(() => {
+    if (showAllTemplates) return INDIA_TEMPLATE_PRESETS;
+    const featured = INDIA_TEMPLATE_PRESETS.slice(0, 3);
+    if (!activeIndiaTemplate) return featured;
+    if (featured.some((template) => template.id === activeIndiaTemplate.id)) {
+      return featured;
+    }
+    return [activeIndiaTemplate, ...featured.filter((template) => template.id !== activeIndiaTemplate.id)].slice(0, 3);
+  }, [showAllTemplates, activeIndiaTemplate]);
+  const emptyStateTemplate = activeIndiaTemplate ?? INDIA_TEMPLATE_PRESETS[0];
+  const emptyStatePreviewStops = useMemo(() => {
+    if (!emptyStateTemplate) return [];
+    const tokens = emptyStateTemplate.interests
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+    return [
+      `Arrive and settle in ${emptyStateTemplate.destination}`,
+      tokens[0] ? `${tokens[0][0].toUpperCase()}${tokens[0].slice(1)} experience` : "Local experience tour",
+      tokens[1] ? `${tokens[1][0].toUpperCase()}${tokens[1].slice(1)} focus` : "Signature evening plan",
+    ];
+  }, [emptyStateTemplate]);
   const premiumPreview = searchParams.get("premium") === "1";
   const pdfIsPremium = isPremium || premiumPreview;
   const pdfDebug = searchParams.get("pdfdebug") === "1";
@@ -3009,12 +3032,17 @@ export default function PlannerPage() {
                 <div className="rahi-card p-4 border border-white/10">
                   <div className="flex items-center justify-between mb-3">
                     <span className={labelStyle}>India Template Packs</span>
-                    <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
-                      Quick Start
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowAllTemplates((prev) => !prev)}
+                      className="text-[10px] text-gray-300 uppercase tracking-[0.16em] px-2 py-1 rounded-full border border-white/15 hover:border-teal-400/40 hover:text-teal-200 transition"
+                    >
+                      {showAllTemplates ? "Show less" : `View all ${INDIA_TEMPLATE_PRESETS.length}`}
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {INDIA_TEMPLATE_PRESETS.map((template) => {
+                  <div className={`${showAllTemplates ? "max-h-[272px] overflow-y-auto pr-1 custom-scrollbar" : ""}`}>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {visibleTemplatePacks.map((template) => {
                       const isActive = activeTemplateId === template.id;
                       const style =
                         TEMPLATE_CARD_STYLES[template.vibe] || TEMPLATE_CARD_STYLES.default;
@@ -3030,7 +3058,7 @@ export default function PlannerPage() {
                               applyIndiaTemplate(template);
                             }
                           }}
-                          className={`group relative overflow-hidden rounded-xl border p-3 text-left transition cursor-pointer ${
+                          className={`group relative overflow-hidden rounded-xl border p-2.5 text-left transition cursor-pointer ${
                             isActive
                               ? "border-teal-300/70 bg-white/[0.07] shadow-[0_0_0_1px_rgba(20,184,166,0.2),0_10px_24px_rgba(10,25,48,0.45)]"
                               : "border-white/10 bg-black/25 hover:border-teal-500/45 hover:bg-white/[0.05]"
@@ -3048,7 +3076,7 @@ export default function PlannerPage() {
                                 {style.badge}
                               </span>
                             </div>
-                            <p className={`text-[11px] ${style.accent}`}>
+                            <p className={`text-[10px] ${style.accent}`}>
                               {template.destination} • {template.days}D • ₹{formatCurrency(template.budget)}
                             </p>
                             <div className="flex items-center justify-between gap-2">
@@ -3074,6 +3102,7 @@ export default function PlannerPage() {
                         </div>
                       );
                     })}
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -3088,7 +3117,7 @@ export default function PlannerPage() {
                     className="mt-3 w-full rahi-btn-secondary text-xs disabled:opacity-60 disabled:cursor-not-allowed border-teal-300/25 bg-gradient-to-r from-teal-500/15 to-cyan-500/10"
                   >
                     <Sparkles className="w-4 h-4" />
-                    Use Selected Template + Generate
+                    {activeIndiaTemplate ? `Generate ${activeIndiaTemplate.title}` : "Use Selected Template + Generate"}
                   </button>
                 </div>
 
@@ -3287,12 +3316,60 @@ export default function PlannerPage() {
               )}
 
               {!trip ? (
-                <div className="flex flex-col items-center justify-center flex-1 text-gray-500 opacity-60">
-                  <div className="p-8 rounded-full bg-white/5 border border-white/5 mb-4">
-                      <Plane className="w-16 h-16 text-teal-500/30" />
+                <div className="flex flex-col justify-center flex-1">
+                  <div className="rahi-card border border-white/10 rounded-2xl p-5 md:p-6 bg-gradient-to-br from-white/[0.04] via-transparent to-teal-500/[0.05]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.22em] text-teal-300/80">Sample Plan Preview</p>
+                        <h3 className="text-xl font-display font-bold text-white mt-2">
+                          {emptyStateTemplate.title}
+                        </h3>
+                        <p className="text-sm text-gray-300 mt-1">
+                          {emptyStateTemplate.destination} • {emptyStateTemplate.days} days • ₹
+                          {formatCurrency(emptyStateTemplate.budget)}
+                        </p>
+                      </div>
+                      <div className="p-3 rounded-xl border border-white/10 bg-black/25">
+                        <Plane className="w-7 h-7 text-teal-300/80" />
+                      </div>
+                    </div>
+
+                    <div className="mt-5 space-y-2">
+                      {emptyStatePreviewStops.map((item, index) => (
+                        <div
+                          key={`${item}-${index}`}
+                          className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-gray-200"
+                        >
+                          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-teal-400/40 bg-teal-500/15 text-[11px] text-teal-200">
+                            {index + 1}
+                          </span>
+                          {item}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      <span className="rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs text-gray-300">
+                        {emptyStateTemplate.vibe} vibes
+                      </span>
+                      <span className="rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs text-gray-300">
+                        India-ready template
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={loading || streaming}
+                      onClick={() => applyIndiaTemplate(emptyStateTemplate, true)}
+                      className="mt-6 w-full rahi-btn-primary py-3 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Generate This Plan
+                    </button>
                   </div>
-                  <p className="text-xl font-display font-medium text-white mb-2">Ready for takeoff?</p>
-                  <p className="text-sm max-w-xs text-center">Fill in the details on the left and let Rahi.AI create your magic itinerary.</p>
+                  <p className="text-xs text-gray-400 mt-4 text-center">
+                    Or customize details on the left and generate a completely custom itinerary.
+                  </p>
                 </div>
               ) : (
                 <>
