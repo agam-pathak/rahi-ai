@@ -34,6 +34,8 @@ export default function VoiceSettingsCard({
             className={`rahi-toggle ${voiceSettings.tts ? "is-on" : ""}`}
             onClick={() => toggleSetting("tts")}
             type="button"
+            aria-label="Toggle voice replies"
+            aria-pressed={voiceSettings.tts}
           >
             <span className="sr-only">Toggle voice replies</span>
           </button>
@@ -48,6 +50,8 @@ export default function VoiceSettingsCard({
             className={`rahi-toggle ${voiceSettings.earcons ? "is-on" : ""}`}
             onClick={() => toggleSetting("earcons")}
             type="button"
+            aria-label="Toggle earcon chimes"
+            aria-pressed={voiceSettings.earcons}
           >
             <span className="sr-only">Toggle earcons</span>
           </button>
@@ -62,6 +66,8 @@ export default function VoiceSettingsCard({
             className={`rahi-toggle ${voiceSettings.autoSend ? "is-on" : ""}`}
             onClick={() => toggleSetting("autoSend")}
             type="button"
+            aria-label="Toggle auto send"
+            aria-pressed={voiceSettings.autoSend}
           >
             <span className="sr-only">Toggle auto send</span>
           </button>
@@ -75,6 +81,7 @@ export default function VoiceSettingsCard({
           <select
             className="rahi-select"
             value={voiceSettings.lang}
+            aria-label="Select recognition language"
             onChange={(e) =>
               setVoiceSettings((prev) => ({
                 ...prev,

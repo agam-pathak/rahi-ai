@@ -258,6 +258,9 @@ export default function PlannerPage() {
   const premiumEnabled = process.env.NEXT_PUBLIC_PREMIUM_ENABLED === "true";
   const upiEnabled = process.env.NEXT_PUBLIC_UPI_ENABLED === "true";
   const upiPlanAmount = Number(process.env.NEXT_PUBLIC_UPI_PLAN_AMOUNT_INR ?? "99");
+  const e2eBypassAuth =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_E2E_BYPASS_AUTH === "true";
   const upiStorageKey = "rahi_upi_payment_id";
   const geocodeCacheRef = useRef(new Map<string, [number, number]>());
   const geocodeRunRef = useRef<string | null>(null);
@@ -683,17 +686,22 @@ export default function PlannerPage() {
 
   // 🔐 AUTH GUARD
   useEffect(() => {
+    if (e2eBypassAuth) {
+      setCheckingAuth(false);
+      return;
+    }
     const checkSession = async () => {
       const { data } = await supabase.auth.getSession();
       if (!data.session) router.replace("/login");
       else setCheckingAuth(false);
     };
     checkSession();
-  }, [router]);
+  }, [router, e2eBypassAuth]);
 
   // Scroll chat to bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    bottomRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" });
   }, [chatMessages, typing]);
 
   // Load history
@@ -1268,6 +1276,18 @@ export default function PlannerPage() {
     const updated = history.filter((_, i) => i !== index);
     setHistory(updated);
     localStorage.setItem("trip_history", JSON.stringify(updated));
+  };
+
+  const loadHistoryTrip = (entry: SavedTrip) => {
+    setDestination(entry.destination);
+    setDurationInput(entry.daysInput);
+    setBudget(entry.budgetInput);
+    setInterests(entry.interestsInput);
+    setTrip(entry.tripData);
+    void fetchWeather(
+      entry.destination,
+      Number(entry.daysInput) || entry.tripData.days?.length || 5
+    );
   };
 
   const updateHistoryEntry = useCallback((updatedTrip: Trip) => {
@@ -2694,6 +2714,9 @@ export default function PlannerPage() {
 
   return (
     <main className="rahi-planner-page relative min-h-screen overflow-hidden bg-black text-white selection:bg-teal-500 selection:text-black">
+      <a href="#planner-main-content" className="rahi-skip-link">
+        Skip to planner content
+      </a>
       {/* 1. GLOBAL ANIMATED BACKGROUND */}
       <RahiBackground />
 
@@ -2706,8 +2729,8 @@ export default function PlannerPage() {
         </div>
       ) : (
         <>
-        <div className="rahi-planner-shell relative z-10 mx-auto max-w-[1580px] px-4 pb-10 pt-4 sm:px-6 md:px-10 md:pt-6">
-        <div className="rahi-topbar mb-6 flex flex-col items-start justify-between gap-3 px-4 py-3 sm:flex-row sm:items-center">
+        <div id="planner-main-content" className="rahi-planner-shell relative z-10 mx-auto max-w-[1580px] px-4 pb-10 pt-4 sm:px-6 md:px-10 md:pt-6">
+        <header className="rahi-topbar mb-6 flex flex-col items-start justify-between gap-3 px-4 py-3 sm:flex-row sm:items-center">
           <div className="rahi-logo rahi-planner-brand flex items-center gap-2 text-lg font-display font-bold text-white">
             <img
               src="/brand/rahi-mark.svg"
@@ -2721,6 +2744,7 @@ export default function PlannerPage() {
               <button
                 type="button"
                 className="rahi-btn-secondary text-xs px-3 py-2"
+                aria-pressed={focusView}
                 onClick={() => setFocusView((prev) => !prev)}
               >
                 {focusView ? (
@@ -2741,9 +2765,13 @@ export default function PlannerPage() {
             </a>
             <ThemeToggle />
           </div>
-        </div>
+        </header>
         {toast && (
-          <div className="rahi-toast fixed right-6 top-6 z-50 rounded-xl border border-white/10 bg-black/80 px-4 py-2 text-sm text-white shadow-lg backdrop-blur">
+          <div
+            role="status"
+            aria-live="polite"
+            className="rahi-toast fixed right-6 top-6 z-50 rounded-xl border border-white/10 bg-black/80 px-4 py-2 text-sm text-white shadow-lg backdrop-blur"
+          >
             {toast}
           </div>
         )}
@@ -2787,6 +2815,7 @@ export default function PlannerPage() {
                   key={modeKey}
                   type="button"
                   aria-current={active ? "page" : undefined}
+                  aria-label={`Switch planner mode to ${label}`}
                   className={`rahi-mode-chip ${active ? "is-active" : ""}`}
                   onClick={() => {
                     const params = new URLSearchParams(searchParams.toString());
@@ -3114,16 +3143,17 @@ export default function PlannerPage() {
                       <div
                         key={t.time}
                         className="group flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 hover:border-teal-500/30 transition cursor-pointer"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Load saved trip for ${t.destination}`}
                         onClick={() => {
-                          setDestination(t.destination);
-                          setDurationInput(t.daysInput);
-                          setBudget(t.budgetInput);
-                          setInterests(t.interestsInput);
-                          setTrip(t.tripData);
-                          fetchWeather(
-                            t.destination,
-                            Number(t.daysInput) || t.tripData.days?.length || 5
-                          );
+                          loadHistoryTrip(t);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            loadHistoryTrip(t);
+                          }
                         }}
                       >
                         <div>
@@ -3131,6 +3161,8 @@ export default function PlannerPage() {
                             <p className="text-xs text-gray-500">{t.daysInput} Days • ₹{t.budgetInput}</p>
                         </div>
                         <button
+                          type="button"
+                          aria-label={`Delete saved trip for ${t.destination}`}
                           onClick={(e) => {
                              e.stopPropagation();
                              deleteTrip(i);

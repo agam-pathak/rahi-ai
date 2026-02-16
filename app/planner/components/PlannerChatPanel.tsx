@@ -58,6 +58,7 @@ export default function PlannerChatPanel({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.6, ease: premiumEase }}
+      aria-label="AI travel buddy chat"
       className={`rahi-chat-shell w-full max-w-4xl mx-auto ${glassPanel} flex h-[72vh] flex-col overflow-hidden md:h-[78vh]`}
     >
       <div className="rahi-chat-header flex items-center justify-between border-b border-white/10 p-4">
@@ -76,6 +77,7 @@ export default function PlannerChatPanel({
         <div className="flex items-center gap-3">
           <button
             type="button"
+            aria-label={voiceSettingsOpen ? "Close voice settings" : "Open voice settings"}
             className="rahi-btn-ghost rahi-chat-voice-btn"
             onClick={() => setVoiceSettingsOpen((prev) => !prev)}
           >
@@ -114,7 +116,11 @@ export default function PlannerChatPanel({
         </div>
       )}
 
-      <div className="rahi-chat-feed custom-scrollbar flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
+      <div
+        role="log"
+        aria-live="polite"
+        className="rahi-chat-feed custom-scrollbar flex-1 space-y-6 overflow-y-auto p-4 sm:p-6"
+      >
         {chatMessages.length === 0 && (
           <div className="rahi-chat-empty flex h-full flex-col items-center justify-center space-y-4 text-gray-500">
             <div className="rounded-full border border-white/10 bg-white/5 p-6">
@@ -229,6 +235,8 @@ export default function PlannerChatPanel({
             }}
           />
           <button
+            type="button"
+            aria-label="Send chat message"
             onClick={() => {
               void sendChat();
             }}

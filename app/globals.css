@@ -803,6 +803,26 @@ html[data-theme="dark"] .rahi-bg-vignette {
   isolation: isolate;
 }
 
+.rahi-skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0.75rem;
+  z-index: 80;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  background: rgba(2, 6, 23, 0.9);
+  color: #ecfeff;
+  padding: 0.45rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rahi-skip-link:focus-visible {
+  left: 1rem;
+}
+
 .rahi-topbar {
   border-radius: 1.15rem;
   border: 1px solid rgba(148, 163, 184, 0.2);
@@ -910,6 +930,13 @@ html[data-theme="dark"] .rahi-bg-vignette {
   box-shadow: 0 10px 30px -20px rgba(56, 189, 248, 0.9);
 }
 
+.rahi-mode-chip:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(8, 145, 178, 0.48),
+    0 10px 30px -20px rgba(56, 189, 248, 0.92);
+}
+
 .rahi-hero-metrics {
   margin-inline: auto;
   display: grid;
@@ -939,6 +966,10 @@ html[data-theme="dark"] .rahi-bg-vignette {
   color: #ecfeff;
   font-size: 0.96rem;
   font-weight: 700;
+}
+
+.rahi-topbar-actions {
+  gap: 0.55rem;
 }
 
 .rahi-planner-grid {
@@ -1166,6 +1197,29 @@ html[data-theme="dark"] .rahi-bg-vignette {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .rahi-toast,
+  .rahi-fold-content,
+  .rahi-mode-chip,
+  .rahi-btn-primary,
+  .rahi-btn-secondary,
+  .rahi-btn-ghost,
+  .rahi-input,
+  .rahi-chat-bubble,
+  .rahi-chat-avatar,
+  .rahi-panel-premium,
+  .rahi-topbar {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .rahi-chat-feed .animate-bounce,
+  .rahi-planner-page .animate-pulse,
+  .rahi-planner-page .animate-spin {
+    animation: none !important;
+  }
+}
+
 @layer components {
   .rahi-surface {
     background:
@@ -1253,6 +1307,19 @@ html[data-theme="dark"] .rahi-bg-vignette {
     border-color: rgba(56, 189, 248, 0.52);
     color: #d9fef6;
     transform: translateY(-1px);
+  }
+
+  .rahi-btn-primary:focus-visible,
+  .rahi-btn-secondary:focus-visible,
+  .rahi-btn-ghost:focus-visible,
+  .rahi-input:focus-visible,
+  .rahi-toggle:focus-visible,
+  .rahi-select:focus-visible,
+  a.rahi-btn-secondary:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px rgba(8, 145, 178, 0.46),
+      0 14px 30px -24px rgba(56, 189, 248, 0.86);
   }
 
   @media (max-width: 640px) {
