@@ -612,6 +612,7 @@ export default function PlannerPage() {
     budget: { title: "Budget Guardian", subtitle: "Optimize every rupee of your trip." },
     chat: { title: "AI Travel Buddy", subtitle: "Chat with your personal travel assistant." },
   };
+  const MODE_ORDER: Array<keyof typeof MODE_CONFIG> = ["ai", "budget", "chat"];
 
   const TYPE_HINTS: Record<string, string> = {
     solo: "Best for solo exploration & flexibility.",
@@ -2320,16 +2321,16 @@ export default function PlannerPage() {
   };
 
   // --- STYLES ---
-  const glassPanel = "rahi-panel";
-  const inputContainer = "relative group";
-  const inputIcon = "absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-300 transition-colors";
-  const inputField = "rahi-input pl-12 pr-4 py-4";
-  const labelStyle = "rahi-label mb-2";
+  const glassPanel = "rahi-panel rahi-panel-premium";
+  const inputContainer = "relative group rahi-field-group";
+  const inputIcon =
+    "rahi-field-icon absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 transition-colors group-focus-within:text-teal-300";
+  const inputField = "rahi-input rahi-input-premium pl-12 pr-4 py-4";
+  const labelStyle = "rahi-label rahi-label-premium mb-2";
   const foldableShell =
-    "group mb-6 overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-[0_18px_40px_-30px_rgba(23,206,183,0.65)]";
-  const foldableSummary =
-    "flex cursor-pointer list-none items-center justify-between gap-3 border-b border-white/10 px-4 py-3";
-  const foldableContent = "px-4 pb-4 pt-3";
+    "rahi-fold-shell group mb-6 overflow-hidden rounded-xl border border-white/10 bg-white/5";
+  const foldableSummary = "rahi-fold-summary flex list-none items-center justify-between gap-3 px-4 py-3";
+  const foldableContent = "rahi-fold-content px-4 pb-4 pt-3";
   const tripDaysCount = trip?.days?.length ?? 0;
   const totalFromActivities = trip?.days?.reduce((sum, day) => {
     const daySum = day.activities.reduce(
@@ -2692,30 +2693,30 @@ export default function PlannerPage() {
   }, [weather, selectedDay]);
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-black text-white selection:bg-teal-500 selection:text-black">
+    <main className="rahi-planner-page relative min-h-screen overflow-hidden bg-black text-white selection:bg-teal-500 selection:text-black">
       {/* 1. GLOBAL ANIMATED BACKGROUND */}
       <RahiBackground />
 
       {checkingAuth ? (
         <div className="min-h-screen flex items-center justify-center text-teal-300 px-6">
-          <div className="rahi-panel px-8 py-6 flex flex-col items-center gap-4">
+          <div className="rahi-panel rahi-panel-premium px-8 py-6 flex flex-col items-center gap-4">
             <div className="h-8 w-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
             <p className="animate-pulse">Loading Rahi.AI...</p>
           </div>
         </div>
       ) : (
         <>
-        <div className="relative z-10 mx-auto max-w-[1580px] px-4 pb-10 pt-4 sm:px-6 md:px-10 md:pt-6">
-        <div className="mb-6 flex flex-col items-start justify-between gap-3 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 shadow-[0_24px_80px_-55px_rgba(35,228,206,0.55)] backdrop-blur-xl sm:flex-row sm:items-center">
-          <div className="rahi-logo flex items-center gap-2 text-lg font-display font-bold text-white">
+        <div className="rahi-planner-shell relative z-10 mx-auto max-w-[1580px] px-4 pb-10 pt-4 sm:px-6 md:px-10 md:pt-6">
+        <div className="rahi-topbar mb-6 flex flex-col items-start justify-between gap-3 px-4 py-3 sm:flex-row sm:items-center">
+          <div className="rahi-logo rahi-planner-brand flex items-center gap-2 text-lg font-display font-bold text-white">
             <img
               src="/brand/rahi-mark.svg"
               alt="Rahi.AI"
-              className="h-8 w-8 rounded-lg border border-white/10 shadow-[0_0_16px_rgba(20,184,166,0.3)]"
+              className="h-8 w-8 rounded-lg border border-white/10 shadow-[0_0_22px_rgba(20,184,166,0.42)]"
             />
             Rahi.AI
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="rahi-topbar-actions flex flex-wrap items-center gap-2">
             {trip && (
               <button
                 type="button"
@@ -2742,35 +2743,83 @@ export default function PlannerPage() {
           </div>
         </div>
         {toast && (
-          <div className="fixed top-6 right-6 z-50 rounded-xl border border-white/10 bg-black/80 px-4 py-2 text-sm text-white shadow-lg backdrop-blur">
+          <div className="rahi-toast fixed right-6 top-6 z-50 rounded-xl border border-white/10 bg-black/80 px-4 py-2 text-sm text-white shadow-lg backdrop-blur">
             {toast}
           </div>
         )}
-        
+
         {/* HEADER */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, ease: premiumEase }}
-          className="mb-8 text-center"
+          className="rahi-hero-panel mb-8 text-center"
         >
-          <div className="inline-flex items-center gap-2 mb-2">
-            <span className="h-2 w-2 rounded-full bg-teal-400 animate-pulse"/>
-            <span className="text-teal-400 text-sm font-mono tracking-widest uppercase">
+          <div className="rahi-status-pill mb-3 inline-flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-teal-300 animate-pulse" />
+            <span className="text-sm font-mono tracking-widest uppercase">
               Rahi.AI System Active
             </span>
           </div>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-display font-black text-white tracking-tight mb-2">
+          <h1 className="rahi-hero-title mb-2 font-display font-black tracking-tight text-white">
             {MODE_CONFIG[plannerMode]?.title}
           </h1>
-          <p className="text-gray-400 text-lg max-w-xl mx-auto">
+          <p className="rahi-hero-subtitle mx-auto max-w-2xl text-lg">
             {MODE_CONFIG[plannerMode]?.subtitle}
             {tripType !== "general" && (
-              <span className="block text-teal-300 text-sm italic mt-1">
+              <span className="mt-1 block text-sm italic text-teal-200">
                 Currently optimized for: {TYPE_HINTS[tripType]}
               </span>
             )}
           </p>
+
+          <div className="rahi-mode-switch mt-5">
+            {MODE_ORDER.map((modeKey) => {
+              const active = plannerMode === modeKey;
+              const label =
+                modeKey === "ai"
+                  ? "Planner"
+                  : modeKey === "budget"
+                    ? "Budget"
+                    : "Chat";
+              return (
+                <button
+                  key={modeKey}
+                  type="button"
+                  aria-current={active ? "page" : undefined}
+                  className={`rahi-mode-chip ${active ? "is-active" : ""}`}
+                  onClick={() => {
+                    const params = new URLSearchParams(searchParams.toString());
+                    params.set("mode", modeKey);
+                    router.push(`/planner?${params.toString()}`);
+                  }}
+                >
+                  {modeKey === "ai" ? (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  ) : modeKey === "budget" ? (
+                    <IndianRupee className="h-3.5 w-3.5" />
+                  ) : (
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  )}
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="rahi-hero-metrics mt-4">
+            <div className="rahi-hero-metric">
+              <span className="rahi-hero-metric-label">Days</span>
+              <span className="rahi-hero-metric-value">{tripDaysCount || Number(durationInput) || "--"}</span>
+            </div>
+            <div className="rahi-hero-metric">
+              <span className="rahi-hero-metric-label">Budget</span>
+              <span className="rahi-hero-metric-value">₹{formatCurrency(displayBudget || 0)}</span>
+            </div>
+            <div className="rahi-hero-metric">
+              <span className="rahi-hero-metric-label">Saved Trips</span>
+              <span className="rahi-hero-metric-value">{history.length}</span>
+            </div>
+          </div>
         </motion.div>
 
         {plannerMode === "chat" ? (
@@ -2784,7 +2833,11 @@ export default function PlannerPage() {
             sendChat={sendChat}
             looksLikeItinerary={looksLikeItinerary}
             syncFieldsFromChat={syncFieldsFromChat}
-            onSwitchToPlannerMode={() => router.push("/planner?mode=ai")}
+            onSwitchToPlannerMode={() => {
+              const params = new URLSearchParams(searchParams.toString());
+              params.set("mode", "ai");
+              router.push(`/planner?${params.toString()}`);
+            }}
             voiceSettingsOpen={voiceSettingsOpen}
             setVoiceSettingsOpen={setVoiceSettingsOpen}
             voiceSettingsContent={
@@ -2802,7 +2855,7 @@ export default function PlannerPage() {
           />
         ) : (
           /* ---------------- PLANNER / BUDGET MODE UI ---------------- */
-          <div className={`grid gap-6 md:gap-8 ${focusView ? "lg:grid-cols-1" : "lg:grid-cols-12"}`}>
+          <div className={`rahi-planner-grid grid gap-6 md:gap-8 ${focusView ? "lg:grid-cols-1 is-focus" : "lg:grid-cols-12"}`}>
             
             {/* LEFT COLUMN: INPUT FORM */}
             <motion.div 
@@ -2811,13 +2864,16 @@ export default function PlannerPage() {
               transition={{ duration: 0.6, ease: premiumEase }}
               className={`${
                 focusView ? "hidden" : "lg:col-span-5"
-              } ${glassPanel} h-fit p-5 md:p-7 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7.5rem)] lg:overflow-y-auto custom-scrollbar`}
+              } ${glassPanel} rahi-planner-form-panel h-fit p-5 md:p-7 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7.5rem)] lg:overflow-y-auto custom-scrollbar`}
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-teal-500/20 rounded-lg">
                     <Compass className="w-6 h-6 text-teal-400" />
                 </div>
-                <h2 className="text-xl font-display font-bold text-white">Trip Details</h2>
+                <div>
+                  <h2 className="text-xl font-display font-bold text-white">Trip Details</h2>
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-teal-200/75">Live itinerary control</p>
+                </div>
               </div>
 
               <div className="space-y-5">
@@ -3095,7 +3151,7 @@ export default function PlannerPage() {
                initial={{ opacity: 0, x: 20 }}
                animate={{ opacity: 1, x: 0 }}
                transition={{ duration: 0.6, ease: premiumEase }}
-               className={`${focusView ? "lg:col-span-1" : "lg:col-span-7"} ${glassPanel} relative flex min-h-[520px] flex-col p-5 md:min-h-[600px] md:p-7`}
+               className={`${focusView ? "lg:col-span-1" : "lg:col-span-7"} ${glassPanel} rahi-planner-result-panel relative flex min-h-[520px] flex-col p-5 md:min-h-[600px] md:p-7`}
             >
               {loading && !streaming && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-20 rounded-2xl">

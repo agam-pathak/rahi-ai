@@ -17,15 +17,15 @@ export default function VoiceSettingsCard({
   };
 
   return (
-    <div className="rahi-card p-4 border border-white/10">
+    <div className="rahi-card rahi-voice-settings-card border border-white/10 p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="rahi-label">Voice Settings</span>
+        <span className="rahi-label rahi-label-premium">Voice Settings</span>
         <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
           Personal
         </span>
       </div>
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-4">
+        <div className="rahi-voice-setting-row flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-white">Voice Replies</p>
             <p className="text-xs text-gray-400">Speak AI responses aloud.</p>
@@ -39,7 +39,7 @@ export default function VoiceSettingsCard({
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-4">
+        <div className="rahi-voice-setting-row flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-white">Earcon Chimes</p>
             <p className="text-xs text-gray-400">Soft cues on start/send.</p>
@@ -53,7 +53,7 @@ export default function VoiceSettingsCard({
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-4">
+        <div className="rahi-voice-setting-row flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-white">Auto Send</p>
             <p className="text-xs text-gray-400">Send after short pause.</p>
@@ -67,7 +67,7 @@ export default function VoiceSettingsCard({
           </button>
         </div>
 
-        <div className="flex items-center justify-between gap-4">
+        <div className="rahi-voice-setting-row flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-white">Language</p>
             <p className="text-xs text-gray-400">Recognition preference.</p>

@@ -58,17 +58,17 @@ export default function PlannerChatPanel({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.6, ease: premiumEase }}
-      className={`w-full max-w-4xl mx-auto ${glassPanel} flex flex-col h-[70vh] md:h-[75vh] overflow-hidden`}
+      className={`rahi-chat-shell w-full max-w-4xl mx-auto ${glassPanel} flex h-[72vh] flex-col overflow-hidden md:h-[78vh]`}
     >
-      <div className="p-4 border-b border-white/10 bg-black/20 flex items-center justify-between">
+      <div className="rahi-chat-header flex items-center justify-between border-b border-white/10 p-4">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-teal-500/20 flex items-center justify-center">
+          <div className="rahi-chat-avatar flex h-10 w-10 items-center justify-center rounded-full">
             <Sparkles className="h-5 w-5 text-teal-400" />
           </div>
           <div>
             <h3 className="font-bold text-white">Rahi Assistant</h3>
             <div className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-xs text-gray-400">Online</span>
             </div>
           </div>
@@ -76,7 +76,7 @@ export default function PlannerChatPanel({
         <div className="flex items-center gap-3">
           <button
             type="button"
-            className="rahi-btn-ghost"
+            className="rahi-btn-ghost rahi-chat-voice-btn"
             onClick={() => setVoiceSettingsOpen((prev) => !prev)}
           >
             <Settings className="w-4 h-4" />
@@ -108,35 +108,41 @@ export default function PlannerChatPanel({
         </div>
       </div>
 
-      {voiceSettingsOpen && <div className="px-4 pb-4">{voiceSettingsContent}</div>}
+      {voiceSettingsOpen && (
+        <div className="rahi-chat-voice-settings px-4 pb-4 pt-2">
+          {voiceSettingsContent}
+        </div>
+      )}
 
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
+      <div className="rahi-chat-feed custom-scrollbar flex-1 space-y-6 overflow-y-auto p-4 sm:p-6">
         {chatMessages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-4">
-            <div className="p-6 rounded-full bg-white/5 border border-white/10">
+          <div className="rahi-chat-empty flex h-full flex-col items-center justify-center space-y-4 text-gray-500">
+            <div className="rounded-full border border-white/10 bg-white/5 p-6">
               <MessageSquare className="h-12 w-12 text-teal-500/50" />
             </div>
             <div className="text-center">
-              <p className="text-lg text-white font-medium">👋 Hi! I'm Rahi.AI</p>
-              <p className="text-sm">Ask me anything to start planning.</p>
+              <p className="text-lg font-medium text-white">Welcome to Rahi.AI</p>
+              <p className="text-sm">Ask for a route, budget, or full itinerary.</p>
             </div>
-            <div className="flex gap-2 text-xs">
-              <span
-                className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer transition"
+            <div className="flex flex-wrap justify-center gap-2 text-xs">
+              <button
+                type="button"
+                className="rahi-chat-prompt rounded-full border border-white/10 bg-white/5 px-3 py-1.5 transition hover:bg-white/10"
                 onClick={() => {
                   void sendChat("Plan a trip to Goa");
                 }}
               >
-                🏖️ Plan Goa Trip
-              </span>
-              <span
-                className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer transition"
+                Goa weekend itinerary
+              </button>
+              <button
+                type="button"
+                className="rahi-chat-prompt rounded-full border border-white/10 bg-white/5 px-3 py-1.5 transition hover:bg-white/10"
                 onClick={() => {
                   void sendChat("Budget tips for students");
                 }}
               >
-                💰 Budget Tips
-              </span>
+                Student budget breakdown
+              </button>
             </div>
           </div>
         )}
@@ -153,10 +159,10 @@ export default function PlannerChatPanel({
               className={`flex ${isAI ? "justify-start" : "justify-end"}`}
             >
               <div
-                className={`max-w-[85%] p-4 rounded-2xl ${
+                className={`rahi-chat-bubble max-w-[85%] rounded-2xl p-4 ${
                   isAI
-                    ? "bg-white/10 text-gray-200 border border-white/5 rounded-tl-none"
-                    : "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg rounded-tr-none"
+                    ? "rahi-chat-bubble-ai border border-white/5 text-gray-200 rounded-tl-none"
+                    : "rahi-chat-bubble-user text-white rounded-tr-none"
                 }`}
               >
                 <span className="block text-[10px] opacity-70 mb-1 font-bold uppercase tracking-wider">
@@ -171,6 +177,7 @@ export default function PlannerChatPanel({
                 {isAI && looksLikeItinerary(textContent) && (
                   <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-white/10">
                     <button
+                      type="button"
                       onClick={() => {
                         syncFieldsFromChat(textContent);
                         onSwitchToPlannerMode();
@@ -187,7 +194,7 @@ export default function PlannerChatPanel({
         })}
 
         {typing && (
-          <div className="flex items-center gap-2 text-gray-500 text-sm italic ml-2">
+          <div className="rahi-chat-thinking ml-2 flex items-center gap-2 text-sm italic text-gray-500">
             <div className="flex gap-1">
               <span
                 className="w-2 h-2 rounded-full bg-teal-500 animate-bounce"
@@ -208,10 +215,10 @@ export default function PlannerChatPanel({
         <div ref={bottomRef} />
       </div>
 
-      <div className="p-3 sm:p-4 bg-black/40 border-t border-white/10 backdrop-blur-md">
+      <div className="rahi-chat-input-shell border-t border-white/10 bg-black/40 p-3 backdrop-blur-md sm:p-4">
         <div className="flex gap-2">
           <input
-            className="flex-1 rahi-input"
+            className="flex-1 rahi-input rahi-input-premium"
             placeholder="Ask Rahi (e.g., '3 day trip to Manali under 10k')..."
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
@@ -225,7 +232,7 @@ export default function PlannerChatPanel({
             onClick={() => {
               void sendChat();
             }}
-            className="rahi-btn-primary px-3 py-3"
+            className="rahi-btn-primary rahi-chat-send px-3 py-3"
           >
             <Send className="w-5 h-5" />
           </button>

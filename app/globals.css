@@ -772,13 +772,411 @@ html[data-theme="dark"] .rahi-bg-vignette {
   }
 }
 
+@keyframes rahiToastIn {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -10px, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes rahiFoldIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rahi-planner-page {
+  --rahi-planner-accent: rgba(45, 212, 191, 0.45);
+  --rahi-planner-accent-strong: rgba(56, 189, 248, 0.5);
+}
+
+.rahi-planner-shell {
+  isolation: isolate;
+}
+
+.rahi-topbar {
+  border-radius: 1.15rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background:
+    linear-gradient(115deg, rgba(17, 24, 39, 0.88), rgba(8, 47, 73, 0.65)),
+    rgba(2, 6, 23, 0.7);
+  box-shadow: 0 24px 70px -48px rgba(45, 212, 191, 0.65);
+  backdrop-filter: blur(18px);
+}
+
+.rahi-planner-brand {
+  letter-spacing: 0.01em;
+  text-shadow: 0 0 24px rgba(45, 212, 191, 0.24);
+}
+
+.rahi-toast {
+  border-color: rgba(45, 212, 191, 0.28);
+  background:
+    linear-gradient(125deg, rgba(8, 47, 73, 0.74), rgba(2, 6, 23, 0.88)),
+    rgba(2, 6, 23, 0.75);
+  box-shadow: 0 24px 42px -28px rgba(8, 145, 178, 0.62);
+  animation: rahiToastIn 180ms ease-out;
+}
+
+.rahi-hero-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.3rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  padding: clamp(1.15rem, 2.8vw, 2rem) clamp(1rem, 3vw, 2.2rem);
+  background:
+    radial-gradient(circle at 50% -30%, rgba(56, 189, 248, 0.2), transparent 62%),
+    linear-gradient(165deg, rgba(15, 23, 42, 0.74), rgba(2, 6, 23, 0.9));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 40px 90px -62px rgba(56, 189, 248, 0.75);
+}
+
+.rahi-hero-panel::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: min(560px, 80%);
+  height: 1px;
+  transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.65), transparent);
+  pointer-events: none;
+}
+
+.rahi-status-pill {
+  border-radius: 999px;
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  background: rgba(15, 118, 110, 0.16);
+  color: #99f6e4;
+  padding: 0.4rem 0.85rem;
+}
+
+.rahi-hero-title {
+  font-size: clamp(2rem, 4vw, 4rem);
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.rahi-hero-subtitle {
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.rahi-mode-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.rahi-mode-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-width: 90px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(15, 23, 42, 0.46);
+  color: rgba(203, 213, 225, 0.9);
+  padding: 0.48rem 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: transform 0.2s ease, border-color 0.22s ease, color 0.22s ease, background 0.22s ease;
+}
+
+.rahi-mode-chip:hover {
+  transform: translateY(-1px);
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #ecfeff;
+}
+
+.rahi-mode-chip.is-active {
+  border-color: rgba(56, 189, 248, 0.65);
+  background: linear-gradient(120deg, rgba(15, 118, 110, 0.35), rgba(14, 116, 144, 0.36));
+  color: #ecfeff;
+  box-shadow: 0 10px 30px -20px rgba(56, 189, 248, 0.9);
+}
+
+.rahi-hero-metrics {
+  margin-inline: auto;
+  display: grid;
+  width: min(720px, 100%);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.rahi-hero-metric {
+  border-radius: 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.17);
+  background: rgba(2, 6, 23, 0.45);
+  padding: 0.55rem 0.65rem;
+}
+
+.rahi-hero-metric-label {
+  display: block;
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 0.63rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rahi-hero-metric-value {
+  display: block;
+  margin-top: 0.2rem;
+  color: #ecfeff;
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.rahi-planner-grid {
+  align-items: start;
+}
+
+.rahi-planner-grid.is-focus {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.rahi-panel-premium {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(148, 163, 184, 0.2);
+  background:
+    linear-gradient(165deg, rgba(15, 23, 42, 0.66), rgba(2, 6, 23, 0.86)),
+    rgba(2, 6, 23, 0.74);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 45px 95px -66px rgba(56, 189, 248, 0.6);
+}
+
+.rahi-panel-premium::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background: linear-gradient(145deg, rgba(56, 189, 248, 0.16), transparent 32%, transparent 70%, rgba(45, 212, 191, 0.15))
+    border-box;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) padding-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.rahi-planner-form-panel {
+  box-shadow: 0 40px 80px -62px rgba(45, 212, 191, 0.78);
+}
+
+.rahi-planner-result-panel {
+  box-shadow: 0 50px 95px -70px rgba(56, 189, 248, 0.86);
+}
+
+.rahi-label-premium {
+  color: rgba(125, 211, 252, 0.9);
+}
+
+.rahi-field-group .rahi-input-premium {
+  transition: border-color 0.22s ease, box-shadow 0.24s ease, transform 0.24s ease;
+}
+
+.rahi-field-group:focus-within .rahi-input-premium {
+  transform: translateY(-1px);
+}
+
+.rahi-field-icon {
+  transition: color 0.22s ease, transform 0.22s ease;
+}
+
+.rahi-field-group:focus-within .rahi-field-icon {
+  transform: translateY(-50%) scale(1.06);
+  color: #7dd3fc;
+}
+
+.rahi-fold-shell {
+  border-color: rgba(148, 163, 184, 0.18);
+  background:
+    linear-gradient(160deg, rgba(15, 23, 42, 0.52), rgba(2, 6, 23, 0.72)),
+    rgba(2, 6, 23, 0.55);
+  box-shadow: 0 24px 42px -36px rgba(56, 189, 248, 0.45);
+  transition: border-color 0.24s ease, box-shadow 0.24s ease, transform 0.24s ease;
+}
+
+.rahi-fold-shell[open] {
+  border-color: rgba(56, 189, 248, 0.32);
+  box-shadow: 0 28px 56px -42px rgba(45, 212, 191, 0.62);
+}
+
+.rahi-fold-summary {
+  cursor: pointer;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  transition: background 0.2s ease;
+}
+
+.rahi-fold-shell:not([open]) .rahi-fold-summary {
+  border-bottom-color: transparent;
+}
+
+.rahi-fold-summary:hover {
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.rahi-fold-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rahi-fold-content {
+  animation: rahiFoldIn 180ms ease-out;
+}
+
+.rahi-chat-shell {
+  border-radius: 1.25rem;
+}
+
+.rahi-chat-header {
+  background:
+    linear-gradient(135deg, rgba(8, 47, 73, 0.32), rgba(2, 6, 23, 0.62)),
+    rgba(2, 6, 23, 0.52);
+}
+
+.rahi-chat-avatar {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(45, 212, 191, 0.42), rgba(14, 116, 144, 0.3)),
+    rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  box-shadow: 0 8px 20px -14px rgba(56, 189, 248, 0.72);
+}
+
+.rahi-chat-voice-btn {
+  background: rgba(8, 47, 73, 0.35);
+  color: rgba(186, 230, 253, 0.92);
+}
+
+.rahi-chat-voice-settings {
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.55), transparent);
+}
+
+.rahi-chat-feed {
+  background:
+    radial-gradient(circle at 14% 8%, rgba(56, 189, 248, 0.12), transparent 36%),
+    radial-gradient(circle at 82% 15%, rgba(45, 212, 191, 0.1), transparent 35%);
+}
+
+.rahi-chat-prompt {
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.rahi-chat-prompt:hover {
+  border-color: rgba(56, 189, 248, 0.45);
+  color: #ecfeff;
+}
+
+.rahi-chat-bubble {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  backdrop-filter: blur(6px);
+}
+
+.rahi-chat-bubble-ai {
+  background: rgba(15, 23, 42, 0.56);
+  box-shadow: 0 18px 34px -28px rgba(15, 23, 42, 0.85);
+}
+
+.rahi-chat-bubble-user {
+  border-color: rgba(125, 211, 252, 0.32);
+  background: linear-gradient(130deg, rgba(13, 148, 136, 0.88), rgba(14, 116, 144, 0.9));
+  box-shadow: 0 22px 42px -30px rgba(45, 212, 191, 0.8);
+}
+
+.rahi-chat-thinking {
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.rahi-chat-input-shell {
+  background:
+    linear-gradient(180deg, rgba(15, 23, 42, 0.3), rgba(2, 6, 23, 0.74)),
+    rgba(2, 6, 23, 0.62);
+}
+
+.rahi-chat-send {
+  min-width: 52px;
+}
+
+.rahi-voice-settings-card {
+  background:
+    linear-gradient(160deg, rgba(15, 23, 42, 0.54), rgba(2, 6, 23, 0.72)),
+    rgba(2, 6, 23, 0.6);
+}
+
+.rahi-voice-setting-row {
+  padding: 0.35rem 0;
+}
+
+.rahi-voice-setting-row + .rahi-voice-setting-row {
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.55) rgba(15, 23, 42, 0.45);
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(45, 212, 191, 0.7), rgba(56, 189, 248, 0.68));
+  border: 2px solid rgba(15, 23, 42, 0.68);
+}
+
+@media (max-width: 768px) {
+  .rahi-hero-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .rahi-mode-chip {
+    min-width: 82px;
+    padding-inline: 0.7rem;
+  }
+
+  .rahi-toast {
+    left: 1rem;
+    right: 1rem;
+    top: 1rem;
+  }
+}
+
 @layer components {
   .rahi-surface {
-    background: var(--rahi-surface);
+    background:
+      linear-gradient(155deg, rgba(15, 23, 42, 0.72), rgba(2, 6, 23, 0.86)),
+      var(--rahi-surface);
     border: 1px solid var(--rahi-border);
     border-radius: var(--rahi-radius-lg);
-    box-shadow: var(--rahi-shadow);
-    backdrop-filter: blur(18px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      var(--rahi-shadow);
+    backdrop-filter: blur(20px);
   }
 
   .rahi-panel {
@@ -786,9 +1184,10 @@ html[data-theme="dark"] .rahi-bg-vignette {
   }
 
   .rahi-card {
-    background: rgba(15, 23, 42, 0.35);
-    border: 1px solid rgba(148, 163, 184, 0.15);
+    background: rgba(15, 23, 42, 0.42);
+    border: 1px solid rgba(148, 163, 184, 0.17);
     border-radius: var(--rahi-radius-md);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
   }
 
   .rahi-label {
@@ -798,8 +1197,8 @@ html[data-theme="dark"] .rahi-bg-vignette {
 
   .rahi-input {
     @apply w-full rounded-xl px-4 py-3 text-sm transition-all;
-    background: rgba(2, 6, 23, 0.55);
-    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: linear-gradient(180deg, rgba(2, 6, 23, 0.62), rgba(15, 23, 42, 0.55));
+    border: 1px solid rgba(148, 163, 184, 0.3);
     color: var(--rahi-text);
   }
 
@@ -809,44 +1208,51 @@ html[data-theme="dark"] .rahi-bg-vignette {
 
   .rahi-input:focus {
     outline: none;
-    border-color: var(--rahi-accent);
-    box-shadow: 0 0 0 2px rgba(20, 184, 166, 0.2);
+    border-color: rgba(56, 189, 248, 0.6);
+    box-shadow:
+      0 0 0 2px rgba(45, 212, 191, 0.2),
+      0 14px 30px -24px rgba(56, 189, 248, 0.8);
   }
 
   .rahi-btn-primary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 font-semibold transition;
-    background: linear-gradient(135deg, var(--rahi-accent), var(--rahi-accent-2));
+    background: linear-gradient(130deg, #2dd4bf, #38bdf8);
     color: #021018;
-    box-shadow: 0 16px 32px rgba(20, 184, 166, 0.2);
+    box-shadow: 0 18px 36px -20px rgba(56, 189, 248, 0.7);
+    letter-spacing: 0.01em;
   }
 
   .rahi-btn-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 18px 36px rgba(20, 184, 166, 0.28);
+    transform: translateY(-2px);
+    box-shadow: 0 24px 42px -18px rgba(56, 189, 248, 0.82);
   }
 
   .rahi-btn-secondary {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition;
-    background: rgba(15, 23, 42, 0.6);
-    border: 1px solid rgba(148, 163, 184, 0.25);
+    background:
+      linear-gradient(160deg, rgba(15, 23, 42, 0.7), rgba(2, 6, 23, 0.78)),
+      rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.28);
     color: var(--rahi-text);
   }
 
   .rahi-btn-secondary:hover {
-    border-color: rgba(45, 212, 191, 0.45);
+    border-color: rgba(56, 189, 248, 0.5);
     color: #e2f8f4;
+    transform: translateY(-1px);
   }
 
   .rahi-btn-ghost {
     @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition;
-    background: rgba(148, 163, 184, 0.08);
-    border: 1px solid rgba(148, 163, 184, 0.2);
+    background: rgba(15, 23, 42, 0.4);
+    border: 1px solid rgba(148, 163, 184, 0.24);
     color: var(--rahi-muted);
   }
 
   .rahi-btn-ghost:hover {
-    border-color: rgba(45, 212, 191, 0.5);
+    border-color: rgba(56, 189, 248, 0.52);
     color: #d9fef6;
+    transform: translateY(-1px);
   }
 
   @media (max-width: 640px) {
@@ -874,8 +1280,8 @@ html[data-theme="dark"] .rahi-bg-vignette {
     width: 44px;
     height: 24px;
     border-radius: 999px;
-    border: 1px solid rgba(148, 163, 184, 0.25);
-    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    background: rgba(15, 23, 42, 0.72);
     transition: all 0.3s ease;
   }
 
@@ -892,8 +1298,9 @@ html[data-theme="dark"] .rahi-bg-vignette {
   }
 
   .rahi-toggle.is-on {
-    background: linear-gradient(135deg, var(--rahi-accent), var(--rahi-accent-2));
-    border-color: rgba(20, 184, 166, 0.6);
+    background: linear-gradient(135deg, #2dd4bf, #38bdf8);
+    border-color: rgba(56, 189, 248, 0.64);
+    box-shadow: 0 8px 16px -10px rgba(56, 189, 248, 0.72);
   }
 
   .rahi-toggle.is-on::after {
@@ -902,8 +1309,8 @@ html[data-theme="dark"] .rahi-bg-vignette {
   }
 
   .rahi-select {
-    background: rgba(2, 6, 23, 0.6);
-    border: 1px solid rgba(148, 163, 184, 0.25);
+    background: rgba(2, 6, 23, 0.78);
+    border: 1px solid rgba(148, 163, 184, 0.34);
     color: #e2e8f0;
     padding: 6px 10px;
     border-radius: 10px;
