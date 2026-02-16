@@ -328,6 +328,11 @@ export default function PlannerPage() {
   const [optimizingDay, setOptimizingDay] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number>(1);
   const [billingLoading, setBillingLoading] = useState(false);
+  const [hasStripeCustomer, setHasStripeCustomer] = useState(false);
+  const [upiOpen, setUpiOpen] = useState(false);
+  const [upiPaymentId, setUpiPaymentId] = useState<string | null>(null);
+  const [upiStatus, setUpiStatus] = useState<"idle" | "pending" | "checking" | "paid" | "error">("idle");
+  const [upiError, setUpiError] = useState<string | null>(null);
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistStatus, setWaitlistStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
@@ -335,6 +340,9 @@ export default function PlannerPage() {
   const [storyLoading, setStoryLoading] = useState(false);
   const [pdfThemeOverride, setPdfThemeOverride] = useState<string | null>(null);
   const premiumEnabled = process.env.NEXT_PUBLIC_PREMIUM_ENABLED === "true";
+  const upiEnabled = process.env.NEXT_PUBLIC_UPI_ENABLED === "true";
+  const upiPlanAmount = Number(process.env.NEXT_PUBLIC_UPI_PLAN_AMOUNT_INR ?? "99");
+  const upiStorageKey = "rahi_upi_payment_id";
   const geocodeCacheRef = useRef(new Map<string, [number, number]>());
   const geocodeRunRef = useRef<string | null>(null);
   const checklistSaveRef = useRef<number | null>(null);
@@ -566,10 +574,91 @@ export default function PlannerPage() {
     }
   };
 
+  const checkUpiStatus = async (paymentIdOverride?: string) => {
+    const paymentId = (paymentIdOverride ?? upiPaymentId)?.trim();
+    if (!paymentId) {
+      setUpiError("Start a UPI payment first.");
+      setUpiStatus("error");
+      showToast("No UPI payment found. Start payment first.");
+      return;
+    }
+
+    setUpiStatus("checking");
+    setUpiError(null);
+    try {
+      const res = await fetch(`/api/billing/upi/status?payment_id=${encodeURIComponent(paymentId)}`);
+      if (!res.ok) {
+        const msg = await parseApiError(res);
+        setUpiError(msg || "Unable to verify payment right now.");
+        setUpiStatus("error");
+        showToast(msg || "Unable to verify payment.");
+        return;
+      }
+
+      const data = await res.json();
+      if (data?.paid) {
+        setIsPremium(true);
+        setHasStripeCustomer(false);
+        setUpiStatus("paid");
+        showToast("Payment confirmed. Premium unlocked.");
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem(upiStorageKey);
+        }
+        setUpiPaymentId(null);
+        setUpiOpen(false);
+      } else {
+        setUpiStatus("pending");
+        showToast("Payment is still pending. Complete payment and check again.");
+      }
+    } catch {
+      setUpiError("Unable to check status right now.");
+      setUpiStatus("error");
+      showToast("Unable to verify payment.");
+    }
+  };
+
   const startUpgrade = async () => {
     if (billingLoading) return;
     setBillingLoading(true);
     try {
+      if (upiEnabled) {
+        const res = await fetch("/api/billing/upi/initiate", { method: "POST" });
+        if (!res.ok) {
+          const msg = await parseApiError(res);
+          setUpiError(msg || "UPI payment is unavailable right now.");
+          setUpiStatus("error");
+          showToast(msg || "UPI payment is unavailable.");
+          return;
+        }
+
+        const data = await res.json();
+        const url = typeof data?.url === "string" ? data.url : null;
+        const paymentId = typeof data?.paymentId === "string" ? data.paymentId : null;
+
+        if (!url || !paymentId) {
+          setUpiError("UPI payment link could not be created.");
+          setUpiStatus("error");
+          showToast("UPI payment link could not be created.");
+          return;
+        }
+
+        setUpiOpen(true);
+        setUpiError(null);
+        setUpiStatus("pending");
+        setUpiPaymentId(paymentId);
+
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(upiStorageKey, paymentId);
+          const popup = window.open(url, "_blank", "noopener,noreferrer");
+          if (!popup) {
+            window.location.href = url;
+          }
+        }
+
+        showToast("Complete payment in the UPI window, then click Check status.");
+        return;
+      }
+
       const res = await fetch("/api/billing/checkout", { method: "POST" });
       if (!res.ok) {
         const msg = await parseApiError(res);
@@ -590,6 +679,10 @@ export default function PlannerPage() {
   };
 
   const manageBilling = async () => {
+    if (!hasStripeCustomer) {
+      showToast("Premium is active. Billing portal is not available for UPI plans.");
+      return;
+    }
     if (billingLoading) return;
     setBillingLoading(true);
     try {
@@ -728,6 +821,26 @@ export default function PlannerPage() {
     setSearchParams(new URLSearchParams(window.location.search));
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pendingPaymentId = window.localStorage.getItem(upiStorageKey);
+    if (!pendingPaymentId) return;
+    setUpiPaymentId(pendingPaymentId);
+    setUpiStatus("pending");
+  }, [upiStorageKey]);
+
+  useEffect(() => {
+    if (!upiEnabled) return;
+    if (searchParams.get("upi") !== "return") return;
+    if (!upiPaymentId) {
+      setUpiOpen(true);
+      showToast("Returned from UPI. Click Check status to verify payment.");
+      return;
+    }
+    setUpiOpen(true);
+    void checkUpiStatus(upiPaymentId);
+  }, [searchParams, upiEnabled, upiPaymentId]);
+
   // 🔐 AUTH GUARD
   useEffect(() => {
     const checkSession = async () => {
@@ -775,9 +888,11 @@ export default function PlannerPage() {
       .then((res) => res.json())
       .then((data) => {
         setIsPremium(Boolean(data?.is_premium));
+        setHasStripeCustomer(Boolean(data?.stripe_customer_id));
       })
       .catch(() => {
         setIsPremium(false);
+        setHasStripeCustomer(false);
       });
   }, [checkingAuth]);
 
@@ -3402,12 +3517,32 @@ export default function PlannerPage() {
                         </button>
                       )}
                       {isPremium ? (
+                        hasStripeCustomer ? (
+                          <button
+                            onClick={manageBilling}
+                            disabled={billingLoading}
+                            className="rahi-btn-secondary text-sm disabled:opacity-60"
+                          >
+                            {billingLoading ? "Opening..." : "Manage Plan"}
+                          </button>
+                        ) : (
+                          <span className="rounded-full border border-emerald-400/45 bg-emerald-500/12 px-3 py-1.5 text-xs font-semibold text-emerald-200">
+                            Premium Active (UPI)
+                          </span>
+                        )
+                      ) : upiEnabled ? (
                         <button
-                          onClick={manageBilling}
+                          onClick={() => {
+                            setUpiOpen(true);
+                            setUpiError(null);
+                            if (!upiPaymentId) {
+                              void startUpgrade();
+                            }
+                          }}
                           disabled={billingLoading}
-                          className="rahi-btn-secondary text-sm disabled:opacity-60"
+                          className="rahi-btn-primary px-4 py-2 text-sm disabled:opacity-60"
                         >
-                          {billingLoading ? "Opening..." : "Manage Plan"}
+                          {billingLoading ? "Opening..." : "Pay via UPI"}
                         </button>
                       ) : premiumEnabled ? (
                         <button
@@ -4498,6 +4633,72 @@ export default function PlannerPage() {
           </div>
         </div>
       </div>
+
+      {upiOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-md rahi-panel p-6">
+            <h3 className="text-xl font-display font-bold text-white">Premium UPI Checkout</h3>
+            <p className="text-sm text-gray-400 mt-2">
+              Pay ₹{formatCurrency(Number.isFinite(upiPlanAmount) ? upiPlanAmount : 99)} via UPI and then confirm status to unlock Premium.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={() => void startUpgrade()}
+                disabled={billingLoading}
+                className="rahi-btn-primary w-full py-3 disabled:opacity-60"
+              >
+                {billingLoading ? "Creating UPI link..." : upiPaymentId ? "Create fresh UPI link" : "Pay now with UPI"}
+              </button>
+
+              <button
+                onClick={() => void checkUpiStatus()}
+                disabled={upiStatus === "checking" || !upiPaymentId}
+                className="rahi-btn-secondary w-full py-3 disabled:opacity-60"
+              >
+                {upiStatus === "checking" ? "Checking..." : "Check status"}
+              </button>
+
+              {upiPaymentId && (
+                <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">Payment reference</p>
+                  <input
+                    value={upiPaymentId}
+                    onChange={(event) => setUpiPaymentId(event.target.value)}
+                    className="mt-1 w-full bg-transparent text-xs text-gray-200 outline-none"
+                  />
+                </div>
+              )}
+
+              {upiStatus === "pending" && (
+                <p className="text-xs text-amber-200">
+                  Waiting for payment completion. Finish payment in your UPI app, then click Check status.
+                </p>
+              )}
+
+              {upiStatus === "paid" && (
+                <p className="text-sm text-teal-300">Payment verified. Premium is active.</p>
+              )}
+
+              {upiStatus === "error" && (
+                <p className="text-xs text-red-300">{upiError || "Unable to verify payment right now."}</p>
+              )}
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                className="rahi-btn-secondary text-sm"
+                onClick={() => {
+                  setUpiOpen(false);
+                  setUpiStatus((prev) => (prev === "paid" ? prev : "idle"));
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {waitlistOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
