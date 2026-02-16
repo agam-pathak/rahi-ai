@@ -1,23 +1,49 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabase";
 import RahiVoiceUI, { speakWithHeart } from "@/components/RahiVoiceUI";
 import TripItinerary from "@/components/trips/TripItinerary";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  MapPin, Calendar, IndianRupee, Compass, Send, 
+import {
+  MapPin, Calendar, IndianRupee, Compass,
   Download, Share2, Trash2, History, CloudSun,
   Plane, Sparkles, MessageSquare, Lock, Unlock,
   ClipboardCheck, PenLine,
-  Settings, ShieldCheck
-} from "lucide-react"; 
+  Settings, ShieldCheck, ChevronDown, PanelLeftClose, PanelLeftOpen
+} from "lucide-react";
 import RahiBackground from "@/components/RahiBackground";
 import ThemeToggle from "@/components/ThemeToggle";
+import PlannerChatPanel from "./components/PlannerChatPanel";
+import VoiceSettingsCard from "./components/VoiceSettingsCard";
+import type {
+  Activity,
+  DayPlan,
+  DayStat,
+  GeneratePlanOverrides,
+  GroupDecision,
+  GroupPoll,
+  GroupState,
+  SavedTrip,
+  Trip,
+  VoiceSettings,
+  WeatherItem,
+} from "./types";
+import {
+  applyBudgetToTrip,
+  createLocalId,
+  formatCurrency,
+  getActivityCoord,
+  haversineKm,
+  parseActivityIndex,
+  parseBudget,
+  parseDayNumber,
+  parseNumberToken,
+} from "./utils";
+import { useSyncedSearchParams } from "./hooks/useSyncedSearchParams";
+import { usePlannerToast } from "./hooks/usePlannerToast";
 
 const TripMap = dynamic(() => import("@/components/maps/TripMap"), { ssr: false });
 
@@ -151,120 +177,10 @@ const TEMPLATE_CARD_STYLES: Record<
   },
 };
 
-// --- TYPES ---
-
-type Location = {
-  name: string;
-  lat?: number;
-  lng?: number;
-  coordinates?: [number, number];
-};
-
-type Activity = {
-  id: string;
-  title: string;
-  location: Location;
-  estimated_cost: number;
-  order_index: number;
-  type?: string;
-  duration_minutes?: number;
-  tags?: string[];
-  verification?: string;
-};
-
-type DayPlan = {
-  day_number: number;
-  activities: Activity[];
-  summary?: string;
-};
-
-type DayStat = {
-  day: number;
-  count: number;
-  cost: number;
-  duration: number;
-  distance: number;
-};
-
-type TripMeta = {
-  total_estimated_budget: number;
-  pace?: "relaxed" | "balanced" | "packed";
-  primary_vibes?: string[];
-  packing_suggestions?: string[];
-  prep_checklist?: Record<string, boolean>;
-  group_state?: GroupState;
-  signature_story?: string;
-  revision?: number;
-  last_saved_at?: string;
-};
-
-// Full Trip Structure
-type Trip = {
-  id?: string;
-  destination: string;
-  days: DayPlan[];
-  meta: TripMeta;
-  share_code?: string;
-  is_public?: boolean;
-};
-
-type SavedTrip = {
-  destination: string;
-  daysInput: string;
-  budgetInput: string;
-  interestsInput: string;
-  tripData: Trip;
-  time: number;
-};
-
-type WeatherItem = {
-  main?: { temp?: number };
-  weather?: { description?: string }[];
-};
-
-type GroupPollOption = {
-  id: string;
-  label: string;
-  votes: number;
-};
-
-type GroupPoll = {
-  id: string;
-  question: string;
-  options: GroupPollOption[];
-  createdAt: number;
-};
-
-type GroupDecision = {
-  id: string;
-  text: string;
-  done: boolean;
-};
-
-type GroupState = {
-  members?: string[];
-  polls?: GroupPoll[];
-  decisions?: GroupDecision[];
-};
-
-type VoiceSettings = {
-  tts: boolean;
-  earcons: boolean;
-  autoSend: boolean;
-  lang: "en-IN" | "hi-IN";
-};
-
-type GeneratePlanOverrides = {
-  destination?: string;
-  budget?: string;
-  durationInput?: string;
-  interests?: string;
-};
-
 export default function PlannerPage() {
   const router = useRouter();
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
-  const [searchParams, setSearchParams] = useState(() => new URLSearchParams());
+  const searchParams = useSyncedSearchParams();
 
   // --- STATE ---
   const [loading, setLoading] = useState(false);
@@ -282,6 +198,7 @@ export default function PlannerPage() {
   const [interests, setInterests] = useState("");
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [showAllTemplates, setShowAllTemplates] = useState(false);
+  const [focusView, setFocusView] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Group Coordination
@@ -314,8 +231,7 @@ export default function PlannerPage() {
   });
   const bottomRef = useRef<HTMLDivElement>(null);
   const [listening, setListening] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimeoutRef = useRef<number | null>(null);
+  const { toast, showToast } = usePlannerToast();
   const [regeneratingDay, setRegeneratingDay] = useState<number | null>(null);
   const [replacingActivityId, setReplacingActivityId] = useState<string | null>(null);
   const [toggleLoading, setToggleLoading] = useState(false);
@@ -360,69 +276,6 @@ export default function PlannerPage() {
         ? `rahi-group-${destination.trim().toLowerCase()}`
         : null;
 
-  const parseBudget = (value: string) => {
-    const cleaned = value.replace(/,/g, "").trim();
-    const parsed = Number(cleaned);
-    return Number.isFinite(parsed) ? parsed : NaN;
-  };
-
-  const formatCurrency = (value: number) => {
-    if (!Number.isFinite(value)) return "0";
-    return value.toLocaleString("en-IN");
-  };
-
-  const createLocalId = () =>
-    (globalThis.crypto?.randomUUID?.() ??
-      `id-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-
-
-  const getActivityCoord = (activity: Activity) => {
-    const coord = activity.location?.coordinates;
-    if (Array.isArray(coord) && coord.length === 2) {
-      return coord as [number, number];
-    }
-    const lat = Number(activity.location?.lat ?? NaN);
-    const lng = Number(activity.location?.lng ?? NaN);
-    if (Number.isFinite(lat) && Number.isFinite(lng) && (lat !== 0 || lng !== 0)) {
-      return [lng, lat] as [number, number];
-    }
-    return null;
-  };
-
-  const haversineKm = (from: [number, number], to: [number, number]) => {
-    const toRad = (value: number) => (value * Math.PI) / 180;
-    const [lng1, lat1] = from;
-    const [lng2, lat2] = to;
-    const dLat = toRad(lat2 - lat1);
-    const dLng = toRad(lng2 - lng1);
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return 6371 * c;
-  };
-
-  const computeTotalBudget = (days: DayPlan[]) => {
-    return days.reduce((sum, day) => {
-      const dayTotal = day.activities.reduce(
-        (acc, activity) => acc + (Number(activity.estimated_cost) || 0),
-        0
-      );
-      return sum + dayTotal;
-    }, 0);
-  };
-
-  const applyBudgetToTrip = (inputTrip: Trip) => {
-    const total = computeTotalBudget(inputTrip.days);
-    return {
-      ...inputTrip,
-      meta: {
-        ...inputTrip.meta,
-        total_estimated_budget: total,
-      },
-    };
-  };
-
   const serializeTripForSync = useCallback((value: Trip | null) => {
     if (!value?.id) return "";
     return JSON.stringify({
@@ -459,7 +312,7 @@ export default function PlannerPage() {
     [checklistDefaults]
   );
 
-  const parseApiError = async (res: Response) => {
+  const parseApiError = useCallback(async (res: Response) => {
     let message = "Request failed.";
     try {
       const data = await res.json();
@@ -477,17 +330,7 @@ export default function PlannerPage() {
       return "AI key missing. Add GROQ_API_KEY in .env.local.";
     }
     return message;
-  };
-
-  const showToast = (message: string) => {
-    setToast(message);
-    if (toastTimeoutRef.current) {
-      window.clearTimeout(toastTimeoutRef.current);
-    }
-    toastTimeoutRef.current = window.setTimeout(() => {
-      setToast(null);
-    }, 2500);
-  };
+  }, []);
 
   const shareTripLink = () => {
     if (!trip?.share_code) {
@@ -807,19 +650,15 @@ export default function PlannerPage() {
       tokens[1] ? `${tokens[1][0].toUpperCase()}${tokens[1].slice(1)} focus` : "Signature evening plan",
     ];
   }, [emptyStateTemplate]);
-  const premiumPreview = searchParams.get("premium") === "1";
+  const allowPremiumPreview =
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_ALLOW_PREMIUM_PREVIEW === "true";
+  const premiumPreview = allowPremiumPreview && searchParams.get("premium") === "1";
   const pdfIsPremium = isPremium || premiumPreview;
   const pdfDebug = searchParams.get("pdfdebug") === "1";
   const premiumEase = [0.16, 1, 0.3, 1] as const;
 
   // --- EFFECTS ---
-
-  // Next 16 requires useSearchParams() to be wrapped in Suspense. Since this page is fully client-side,
-  // we read query params from window after mount to keep builds/prerender stable.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    setSearchParams(new URLSearchParams(window.location.search));
-  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -898,9 +737,6 @@ export default function PlannerPage() {
 
   useEffect(() => {
     return () => {
-      if (toastTimeoutRef.current) {
-        window.clearTimeout(toastTimeoutRef.current);
-      }
       if (autosaveTimerRef.current) {
         window.clearTimeout(autosaveTimerRef.current);
       }
@@ -1320,7 +1156,12 @@ export default function PlannerPage() {
     if (daysMatch) setDurationInput(String(daysMatch.length));
     
     const destMatch = text.match(/trip to ([a-zA-Z\s]+)/i);
-    if (destMatch) setDestination(destMatch[1].trim().split(" ")[0]);
+    if (destMatch) {
+      const inferredDestination = destMatch[1]
+        .trim()
+        .replace(/\s+(for|under|with|budget).*/i, "");
+      if (inferredDestination) setDestination(inferredDestination);
+    }
     
     const budgetMatch = text.match(/₹\s*([\d,]+)/);
     if (budgetMatch) setBudget(budgetMatch[1].replace(/,/g, ""));
@@ -1428,13 +1269,20 @@ export default function PlannerPage() {
     localStorage.setItem("trip_history", JSON.stringify(updated));
   };
 
-  const updateHistoryEntry = (updatedTrip: Trip) => {
+  const updateHistoryEntry = useCallback((updatedTrip: Trip) => {
     setHistory((prev) => {
       const next = prev.map((entry) => {
-        if (
+        const sameById =
+          entry.tripData?.id &&
+          updatedTrip.id &&
+          entry.tripData.id === updatedTrip.id;
+        const sameByShare =
           entry.tripData?.share_code &&
           updatedTrip.share_code &&
-          entry.tripData.share_code === updatedTrip.share_code
+          entry.tripData.share_code === updatedTrip.share_code;
+        if (
+          sameById ||
+          sameByShare
         ) {
           return { ...entry, tripData: updatedTrip };
         }
@@ -1443,7 +1291,7 @@ export default function PlannerPage() {
       localStorage.setItem("trip_history", JSON.stringify(next));
       return next;
     });
-  };
+  }, []);
 
   const persistTripResult = useCallback(
     async (updatedTrip: Trip, options?: { reason?: "manual" | "autosave" | "queued" }) => {
@@ -1734,6 +1582,7 @@ export default function PlannerPage() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
+      let chunkBuffer = "";
 
       // Local variables to accumulate data (needed because setState is async)
       let accumulatedDays: DayPlan[] = [];
@@ -1746,12 +1595,18 @@ export default function PlannerPage() {
 
       while (true) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          chunkBuffer += decoder.decode();
+        } else {
+          chunkBuffer += decoder.decode(value, { stream: true });
+        }
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n").filter(Boolean);
+        const lines = chunkBuffer.split("\n");
+        chunkBuffer = lines.pop() ?? "";
 
-        for (const line of lines) {
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line) continue;
           try {
             const msg = JSON.parse(line);
 
@@ -1786,9 +1641,43 @@ export default function PlannerPage() {
           }
         }
 
+        if (done) {
+          break;
+        }
         if (stopStream) {
           await reader.cancel();
           break;
+        }
+      }
+
+      if (!stopStream) {
+        const finalLine = chunkBuffer.trim();
+        if (finalLine) {
+          try {
+            const msg = JSON.parse(finalLine);
+            if (msg.type === "day") {
+              accumulatedDays = [...accumulatedDays, msg.payload];
+              setTrip((prev) => (prev ? { ...prev, days: accumulatedDays } : null));
+            }
+            if (msg.type === "meta") {
+              accumulatedMeta = msg.payload;
+              setTrip((prev) => (prev ? { ...prev, meta: accumulatedMeta } : null));
+            }
+            if (msg.type === "share_code") {
+              shareCode = msg.payload;
+              setTrip((prev) => (prev ? { ...prev, share_code: shareCode } : null));
+            }
+            if (msg.type === "trip_id") {
+              tripId = msg.payload;
+              setTrip((prev) => (prev ? { ...prev, id: tripId, is_public: true } : null));
+            }
+            if (msg.type === "error") {
+              setStreamError(msg.message || "AI generation failed.");
+              hadStreamError = true;
+            }
+          } catch (err) {
+            console.error("Error parsing final stream line", err);
+          }
         }
       }
 
@@ -1822,9 +1711,11 @@ export default function PlannerPage() {
       };
 
       // Update Local History
-      const updated = [savedEntry, ...history].slice(0, 10);
-      setHistory(updated);
-      localStorage.setItem("trip_history", JSON.stringify(updated));
+      setHistory((prev) => {
+        const updated = [savedEntry, ...prev].slice(0, 10);
+        localStorage.setItem("trip_history", JSON.stringify(updated));
+        return updated;
+      });
 
       await fetchWeather(destinationValue, Number(durationValue));
 
@@ -1912,16 +1803,23 @@ export default function PlannerPage() {
         .filter((d) => d.day_number !== dayNumber)
         .flatMap((d) => d.activities.map((a) => a.title))
         .filter(Boolean);
+      const effectiveBudget = Number.isFinite(trip.meta?.total_estimated_budget)
+        ? Number(trip.meta.total_estimated_budget)
+        : parseBudget(budget);
+      const effectiveInterests =
+        interests.trim() ||
+        trip.meta?.primary_vibes?.join(", ") ||
+        "sightseeing, food, culture";
 
       const res = await fetch("/api/ai/day", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          destination,
+          destination: trip.destination || destination,
           days: trip.days.length || Number(durationInput),
           day_number: dayNumber,
-          budget: parseBudget(budget),
-          interests,
+          budget: effectiveBudget,
+          interests: effectiveInterests,
           avoid_titles: avoidTitles,
         }),
       });
@@ -1987,15 +1885,22 @@ export default function PlannerPage() {
         .filter((a) => a.id !== activityId)
         .map((a) => a.title)
         .filter(Boolean);
+      const effectiveBudget = Number.isFinite(trip.meta?.total_estimated_budget)
+        ? Number(trip.meta.total_estimated_budget)
+        : parseBudget(budget);
+      const effectiveInterests =
+        interests.trim() ||
+        trip.meta?.primary_vibes?.join(", ") ||
+        "sightseeing, food, culture";
 
       const res = await fetch("/api/ai/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          destination,
+          destination: trip.destination || destination,
           day_number: dayNumber,
-          budget: parseBudget(budget),
-          interests,
+          budget: effectiveBudget,
+          interests: effectiveInterests,
           current_title: targetActivity.title,
           order_index: targetActivity.order_index,
           avoid_titles: avoidTitles,
@@ -2227,56 +2132,6 @@ export default function PlannerPage() {
     await replaceActivity(expensive.day, expensive.activity.id);
   };
 
-  const wordToNumber = (value: string) => {
-    const map: Record<string, number> = {
-      one: 1,
-      two: 2,
-      three: 3,
-      four: 4,
-      five: 5,
-      six: 6,
-      seven: 7,
-      eight: 8,
-      nine: 9,
-      ten: 10,
-      first: 1,
-      second: 2,
-      third: 3,
-      fourth: 4,
-      fifth: 5,
-      sixth: 6,
-      seventh: 7,
-      eighth: 8,
-      ninth: 9,
-      tenth: 10,
-    };
-    if (!value) return null;
-    const key = value.toLowerCase();
-    return map[key] ?? null;
-  };
-
-  const parseNumberToken = (token?: string | null) => {
-    if (!token) return null;
-    if (/^\d+$/.test(token)) return Number(token);
-    const word = wordToNumber(token);
-    return word ?? null;
-  };
-
-  const parseDayNumber = (text: string) => {
-    const match =
-      text.match(/day\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third)/i) ||
-      text.match(/(\d+|one|two|three|four|five|six|seven|eight|nine|ten)\s*day/i);
-    return parseNumberToken(match?.[1] || match?.[1]);
-  };
-
-  const parseActivityIndex = (text: string) => {
-    const match =
-      text.match(/activity\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third)/i) ||
-      text.match(/(\d+|one|two|three|four|five|six|seven|eight|nine|ten|first|second|third)\s+activity/i);
-    const index = parseNumberToken(match?.[1] || match?.[1]);
-    return index ? index - 1 : null;
-  };
-
   const applyVoiceInputs = (text: string) => {
     let updated = false;
 
@@ -2406,89 +2261,13 @@ export default function PlannerPage() {
     return false;
   };
 
-  const renderVoiceSettings = () => {
-    const toggleSetting = (key: keyof Omit<VoiceSettings, "lang">) => {
-      setVoiceSettings((prev) => ({ ...prev, [key]: !prev[key] }));
-    };
-
-    return (
-      <div className="rahi-card p-4 border border-white/10">
-        <div className="flex items-center justify-between mb-3">
-          <span className="rahi-label">Voice Settings</span>
-          <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
-            Personal
-          </span>
-        </div>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-white">Voice Replies</p>
-              <p className="text-xs text-gray-400">Speak AI responses aloud.</p>
-            </div>
-            <button
-              className={`rahi-toggle ${voiceSettings.tts ? "is-on" : ""}`}
-              onClick={() => toggleSetting("tts")}
-              type="button"
-            >
-              <span className="sr-only">Toggle voice replies</span>
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-white">Earcon Chimes</p>
-              <p className="text-xs text-gray-400">Soft cues on start/send.</p>
-            </div>
-            <button
-              className={`rahi-toggle ${voiceSettings.earcons ? "is-on" : ""}`}
-              onClick={() => toggleSetting("earcons")}
-              type="button"
-            >
-              <span className="sr-only">Toggle earcons</span>
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-white">Auto Send</p>
-              <p className="text-xs text-gray-400">Send after short pause.</p>
-            </div>
-            <button
-              className={`rahi-toggle ${voiceSettings.autoSend ? "is-on" : ""}`}
-              onClick={() => toggleSetting("autoSend")}
-              type="button"
-            >
-              <span className="sr-only">Toggle auto send</span>
-            </button>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-white">Language</p>
-              <p className="text-xs text-gray-400">Recognition preference.</p>
-            </div>
-            <select
-              className="rahi-select"
-              value={voiceSettings.lang}
-              onChange={(e) =>
-                setVoiceSettings((prev) => ({
-                  ...prev,
-                  lang: e.target.value === "hi-IN" ? "hi-IN" : "en-IN",
-                }))
-              }
-            >
-              <option value="en-IN">English (IN)</option>
-              <option value="hi-IN">Hindi (IN)</option>
-            </select>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const sendChat = async (overrideText?: string, source: "text" | "voice" = "text") => {
-    const userMsg = overrideText || chatInput;
+    const userMsg = (overrideText ?? chatInput).trim();
     const isVoice = source === "voice";
+    if (!userMsg) {
+      if (isVoice) setVoiceStatus("idle");
+      return;
+    }
     if (isVoice) setVoiceStatus("thinking");
     setChatMessages((prev) => [...prev, "You: " + userMsg]);
     setChatInput("");
@@ -2546,6 +2325,11 @@ export default function PlannerPage() {
   const inputIcon = "absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-300 transition-colors";
   const inputField = "rahi-input pl-12 pr-4 py-4";
   const labelStyle = "rahi-label mb-2";
+  const foldableShell =
+    "group mb-6 overflow-hidden rounded-xl border border-white/10 bg-white/5 shadow-[0_18px_40px_-30px_rgba(23,206,183,0.65)]";
+  const foldableSummary =
+    "flex cursor-pointer list-none items-center justify-between gap-3 border-b border-white/10 px-4 py-3";
+  const foldableContent = "px-4 pb-4 pt-3";
   const tripDaysCount = trip?.days?.length ?? 0;
   const totalFromActivities = trip?.days?.reduce((sum, day) => {
     const daySum = day.activities.reduce(
@@ -2908,7 +2692,7 @@ export default function PlannerPage() {
   }, [weather, selectedDay]);
 
   return (
-    <main className="relative min-h-screen bg-black text-white selection:bg-teal-500 selection:text-black overflow-hidden">
+    <main className="relative min-h-screen overflow-hidden bg-black text-white selection:bg-teal-500 selection:text-black">
       {/* 1. GLOBAL ANIMATED BACKGROUND */}
       <RahiBackground />
 
@@ -2921,8 +2705,8 @@ export default function PlannerPage() {
         </div>
       ) : (
         <>
-        <div className="relative z-10 p-4 sm:p-6 md:p-12 max-w-7xl mx-auto">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+        <div className="relative z-10 mx-auto max-w-[1580px] px-4 pb-10 pt-4 sm:px-6 md:px-10 md:pt-6">
+        <div className="mb-6 flex flex-col items-start justify-between gap-3 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 shadow-[0_24px_80px_-55px_rgba(35,228,206,0.55)] backdrop-blur-xl sm:flex-row sm:items-center">
           <div className="rahi-logo flex items-center gap-2 text-lg font-display font-bold text-white">
             <img
               src="/brand/rahi-mark.svg"
@@ -2931,7 +2715,26 @@ export default function PlannerPage() {
             />
             Rahi.AI
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {trip && (
+              <button
+                type="button"
+                className="rahi-btn-secondary text-xs px-3 py-2"
+                onClick={() => setFocusView((prev) => !prev)}
+              >
+                {focusView ? (
+                  <>
+                    <PanelLeftOpen className="h-3.5 w-3.5" />
+                    Show Inputs
+                  </>
+                ) : (
+                  <>
+                    <PanelLeftClose className="h-3.5 w-3.5" />
+                    Focus Result
+                  </>
+                )}
+              </button>
+            )}
             <a href="/" className="rahi-btn-secondary text-xs px-3 py-2">
               Home
             </a>
@@ -2971,170 +2774,44 @@ export default function PlannerPage() {
         </motion.div>
 
         {plannerMode === "chat" ? (
-          /* ---------------- CHAT MODE UI ---------------- */
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.6, ease: premiumEase }}
-            className={`w-full max-w-4xl mx-auto ${glassPanel} flex flex-col h-[70vh] md:h-[75vh] overflow-hidden`}
-          >
-            {/* Chat Header */}
-            <div className="p-4 border-b border-white/10 bg-black/20 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                 <div className="h-10 w-10 rounded-full bg-teal-500/20 flex items-center justify-center">
-                    <Sparkles className="h-5 w-5 text-teal-400" />
-                 </div>
-                 <div>
-                   <h3 className="font-bold text-white">Rahi Assistant</h3>
-                   <div className="flex items-center gap-1.5">
-                     <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                     <span className="text-xs text-gray-400">Online</span>
-                   </div>
-                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  className="rahi-btn-ghost"
-                  onClick={() => setVoiceSettingsOpen((prev) => !prev)}
-                >
-                  <Settings className="w-4 h-4" />
-                  Voice
-                </button>
-                <RahiVoiceUI
-                  onText={(text) => {
-                    if (handleVoiceCommand(text)) {
-                      setVoiceStatus("idle");
-                      return;
-                    }
-                    setChatInput(text);
-                    setTimeout(() => sendChat(text, "voice"), 200);
-                  }}
-                  onListening={(active) => {
-                    setListening(active);
-                    setVoiceStatus((prev) => {
-                      if (active) return "listening";
-                      return prev === "listening" ? "idle" : prev;
-                    });
-                  }}
-                  status={voiceStatus}
-                  lang={voiceSettings.lang}
-                  autoSend={voiceSettings.autoSend}
-                  earcons={voiceSettings.earcons}
-                />
-              </div>
-            </div>
-            {voiceSettingsOpen && (
-              <div className="px-4 pb-4">
-                {renderVoiceSettings()}
-              </div>
-            )}
-
-            {/* Chat Area */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6">
-              {chatMessages.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-4">
-                  <div className="p-6 rounded-full bg-white/5 border border-white/10">
-                    <MessageSquare className="h-12 w-12 text-teal-500/50" />
-                  </div>
-                  <div className="text-center">
-                    <p className="text-lg text-white font-medium">👋 Hi! I'm Rahi.AI</p>
-                    <p className="text-sm">Ask me anything to start planning.</p>
-                  </div>
-                  <div className="flex gap-2 text-xs">
-                      <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer transition" onClick={() => sendChat("Plan a trip to Goa")}>🏖️ Plan Goa Trip</span>
-                      <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 cursor-pointer transition" onClick={() => sendChat("Budget tips for students")}>💰 Budget Tips</span>
-                  </div>
-                </div>
-              )}
-
-              {chatMessages.map((msg, i) => {
-                const isAI = msg.startsWith("Rahi.AI:");
-                const textContent = isAI ? msg.slice(8) : msg.slice(4);
-
-                return (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    key={i}
-                    className={`flex ${isAI ? "justify-start" : "justify-end"}`}
-                  >
-                    <div
-                      className={`max-w-[85%] p-4 rounded-2xl ${
-                        isAI
-                          ? "bg-white/10 text-gray-200 border border-white/5 rounded-tl-none"
-                          : "bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-lg rounded-tr-none"
-                      }`}
-                    >
-                      <span className="block text-[10px] opacity-70 mb-1 font-bold uppercase tracking-wider">
-                        {isAI ? "Rahi.AI" : "You"}
-                      </span>
-                      <div className="prose prose-invert prose-sm leading-relaxed">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {textContent}
-                        </ReactMarkdown>
-                      </div>
-
-                      {isAI && looksLikeItinerary(textContent) && (
-                        <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-white/10">
-                          <button
-                            onClick={() => {
-                              syncFieldsFromChat(textContent);
-                              router.push("/planner?mode=ai");
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/40 text-teal-300 text-xs rounded-lg transition border border-teal-500/30"
-                          >
-                            <Plane className="w-3 h-3" /> Convert to Planner
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-              })}
-
-              {typing && (
-                <div className="flex items-center gap-2 text-gray-500 text-sm italic ml-2">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 rounded-full bg-teal-500 animate-bounce" style={{ animationDelay: '0s' }}/>
-                    <span className="w-2 h-2 rounded-full bg-teal-500 animate-bounce" style={{ animationDelay: '0.2s' }}/>
-                    <span className="w-2 h-2 rounded-full bg-teal-500 animate-bounce" style={{ animationDelay: '0.4s' }}/>
-                  </div>
-                  Rahi is thinking...
-                </div>
-              )}
-              <div ref={bottomRef} />
-            </div>
-
-            {/* Input Area */}
-            <div className="p-3 sm:p-4 bg-black/40 border-t border-white/10 backdrop-blur-md">
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 rahi-input"
-                  placeholder="Ask Rahi (e.g., '3 day trip to Manali under 10k')..."
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && sendChat()}
-                />
-                <button
-                  onClick={() => sendChat()}
-                  className="rahi-btn-primary px-3 py-3"
-                >
-                  <Send className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
+          <PlannerChatPanel
+            glassPanel={glassPanel}
+            premiumEase={premiumEase}
+            chatMessages={chatMessages}
+            typing={typing}
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            sendChat={sendChat}
+            looksLikeItinerary={looksLikeItinerary}
+            syncFieldsFromChat={syncFieldsFromChat}
+            onSwitchToPlannerMode={() => router.push("/planner?mode=ai")}
+            voiceSettingsOpen={voiceSettingsOpen}
+            setVoiceSettingsOpen={setVoiceSettingsOpen}
+            voiceSettingsContent={
+              <VoiceSettingsCard
+                voiceSettings={voiceSettings}
+                setVoiceSettings={setVoiceSettings}
+              />
+            }
+            handleVoiceCommand={handleVoiceCommand}
+            setListening={setListening}
+            setVoiceStatus={setVoiceStatus}
+            voiceStatus={voiceStatus}
+            voiceSettings={voiceSettings}
+            bottomRef={bottomRef}
+          />
         ) : (
           /* ---------------- PLANNER / BUDGET MODE UI ---------------- */
-          <div className="grid lg:grid-cols-12 gap-6 md:gap-10">
+          <div className={`grid gap-6 md:gap-8 ${focusView ? "lg:grid-cols-1" : "lg:grid-cols-12"}`}>
             
             {/* LEFT COLUMN: INPUT FORM */}
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, ease: premiumEase }}
-              className={`lg:col-span-5 ${glassPanel} p-6 md:p-8 h-fit`}
+              className={`${
+                focusView ? "hidden" : "lg:col-span-5"
+              } ${glassPanel} h-fit p-5 md:p-7 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7.5rem)] lg:overflow-y-auto custom-scrollbar`}
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className="p-2 bg-teal-500/20 rounded-lg">
@@ -3359,7 +3036,10 @@ export default function PlannerPage() {
                     </button>
                     {voiceSettingsOpen && (
                       <div className="mt-2 w-full">
-                        {renderVoiceSettings()}
+                        <VoiceSettingsCard
+                          voiceSettings={voiceSettings}
+                          setVoiceSettings={setVoiceSettings}
+                        />
                       </div>
                     )}
                   </div>
@@ -3415,7 +3095,7 @@ export default function PlannerPage() {
                initial={{ opacity: 0, x: 20 }}
                animate={{ opacity: 1, x: 0 }}
                transition={{ duration: 0.6, ease: premiumEase }}
-               className={`lg:col-span-7 ${glassPanel} p-6 md:p-8 min-h-[520px] md:min-h-[600px] flex flex-col relative`}
+               className={`${focusView ? "lg:col-span-1" : "lg:col-span-7"} ${glassPanel} relative flex min-h-[520px] flex-col p-5 md:min-h-[600px] md:p-7`}
             >
               {loading && !streaming && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-20 rounded-2xl">
@@ -3603,72 +3283,81 @@ export default function PlannerPage() {
 
                       {/* Weather Section */}
                       {tripHealth && (
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
-                              <ShieldCheck className="w-4 h-4" /> Trip Health
+                        <details open className={foldableShell}>
+                          <summary className={foldableSummary}>
+                            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-300">
+                              <ShieldCheck className="h-4 w-4" /> Trip Health
                             </div>
-                            <button
-                              onClick={autoFixTrip}
-                              disabled={!tripHealth.fixableDays.length || fixingTrip}
-                              className="rahi-btn-ghost text-[10px] disabled:opacity-60"
-                            >
-                              {fixingTrip ? "Fixing..." : "Auto Fix"}
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                            <div className="bg-black/20 p-3 rounded-lg">
-                              <p className="text-xs text-gray-400">Score</p>
-                              <p className="text-lg font-bold text-white">{tripHealth.summary.score}</p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  void autoFixTrip();
+                                }}
+                                disabled={!tripHealth.fixableDays.length || fixingTrip}
+                                className="rahi-btn-ghost text-[10px] disabled:opacity-60"
+                              >
+                                {fixingTrip ? "Fixing..." : "Auto Fix"}
+                              </button>
+                              <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
                             </div>
-                            <div className="bg-black/20 p-3 rounded-lg">
-                              <p className="text-xs text-gray-400">Missing spots</p>
-                              <p className="text-lg font-bold text-white">{tripHealth.summary.missingLocations}</p>
-                            </div>
-                            <div className="bg-black/20 p-3 rounded-lg">
-                              <p className="text-xs text-gray-400">Duplicates</p>
-                              <p className="text-lg font-bold text-white">{tripHealth.summary.duplicateActivities}</p>
-                            </div>
-                            <div className="bg-black/20 p-3 rounded-lg">
-                              <p className="text-xs text-gray-400">Budget</p>
-                              <p className={`text-lg font-bold ${tripHealth.summary.budgetOver ? "text-red-300" : "text-white"}`}>
-                                {tripHealth.summary.budgetOver ? "Over" : "On track"}
-                              </p>
-                            </div>
-                          </div>
-                          {tripHealth.issues.length > 0 ? (
-                            <div className="mt-3 space-y-2">
-                              {tripHealth.issues.slice(0, 4).map((issue) => (
-                                <div
-                                  key={issue.id}
-                                  className="text-xs text-gray-400 border border-white/5 rounded-lg px-3 py-2 bg-black/10"
-                                >
-                                  {issue.message}
-                                </div>
-                              ))}
-                              {tripHealth.issues.length > 4 && (
-                                <p className="text-[10px] text-gray-500">
-                                  +{tripHealth.issues.length - 4} more issues detected.
+                          </summary>
+                          <div className={foldableContent}>
+                            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                              <div className="rounded-lg bg-black/20 p-3">
+                                <p className="text-xs text-gray-400">Score</p>
+                                <p className="text-lg font-bold text-white">{tripHealth.summary.score}</p>
+                              </div>
+                              <div className="rounded-lg bg-black/20 p-3">
+                                <p className="text-xs text-gray-400">Missing spots</p>
+                                <p className="text-lg font-bold text-white">{tripHealth.summary.missingLocations}</p>
+                              </div>
+                              <div className="rounded-lg bg-black/20 p-3">
+                                <p className="text-xs text-gray-400">Duplicates</p>
+                                <p className="text-lg font-bold text-white">{tripHealth.summary.duplicateActivities}</p>
+                              </div>
+                              <div className="rounded-lg bg-black/20 p-3">
+                                <p className="text-xs text-gray-400">Budget</p>
+                                <p className={`text-lg font-bold ${tripHealth.summary.budgetOver ? "text-red-300" : "text-white"}`}>
+                                  {tripHealth.summary.budgetOver ? "Over" : "On track"}
                                 </p>
-                              )}
+                              </div>
                             </div>
-                          ) : (
-                            <p className="text-xs text-gray-400 mt-3">
-                              Everything looks great. Ready to travel.
-                            </p>
-                          )}
-                        </div>
+                            {tripHealth.issues.length > 0 ? (
+                              <div className="mt-3 space-y-2">
+                                {tripHealth.issues.slice(0, 4).map((issue) => (
+                                  <div
+                                    key={issue.id}
+                                    className="rounded-lg border border-white/5 bg-black/10 px-3 py-2 text-xs text-gray-400"
+                                  >
+                                    {issue.message}
+                                  </div>
+                                ))}
+                                {tripHealth.issues.length > 4 && (
+                                  <p className="text-[10px] text-gray-500">
+                                    +{tripHealth.issues.length - 4} more issues detected.
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="mt-3 text-xs text-gray-400">Everything looks great. Ready to travel.</p>
+                            )}
+                          </div>
+                        </details>
                       )}
 
-                      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2 text-amber-300 font-bold text-sm uppercase tracking-wide">
+                      <details open className={foldableShell}>
+                        <summary className={foldableSummary}>
+                          <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-amber-300">
                             <Sparkles className="w-4 h-4" /> Premium Intelligence
                           </div>
-                          <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-gray-400">
                             Insights
-                          </span>
-                        </div>
+                            <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
+                          </div>
+                        </summary>
+                        <div className={foldableContent}>
                         {isPremium ? (
                           <>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -3744,17 +3433,20 @@ export default function PlannerPage() {
                             Upgrade to Premium for route, budget, and pacing intelligence.
                           </div>
                         )}
-                      </div>
+                        </div>
+                      </details>
 
-                      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                      <details className={foldableShell}>
+                        <summary className={foldableSummary}>
+                          <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
                             <Sparkles className="w-4 h-4" /> Rahi.AI Signature Plans
                           </div>
-                          <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-gray-400">
                             3-Plan Stack
-                          </span>
-                        </div>
+                            <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
+                          </div>
+                        </summary>
+                        <div className={foldableContent}>
                         {isPremium ? (
                           <div className="grid lg:grid-cols-3 gap-4">
                             <div className="bg-black/20 p-4 rounded-lg">
@@ -3865,13 +3557,18 @@ export default function PlannerPage() {
                             Upgrade to Premium to unlock Rahi.AI Signature Plans.
                           </div>
                         )}
-                      </div>
+                        </div>
+                      </details>
 
                       {(weather.length > 0 || weatherLoading || weatherError) && (
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-                          <div className="flex items-center gap-2 mb-3 text-teal-400 font-bold text-sm uppercase tracking-wide">
-                             <CloudSun className="w-4 h-4" /> Forecast
-                          </div>
+                        <details className={foldableShell}>
+                          <summary className={foldableSummary}>
+                            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
+                              <CloudSun className="w-4 h-4" /> Forecast
+                            </div>
+                            <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
+                          </summary>
+                          <div className={foldableContent}>
                           {weatherLoading && (
                             <div className="text-xs text-gray-400">Fetching weather...</div>
                           )}
@@ -3892,19 +3589,22 @@ export default function PlannerPage() {
                           {!weatherLoading && !weatherError && weather.length === 0 && (
                             <div className="text-xs text-gray-400">Weather data not available yet.</div>
                           )}
-                        </div>
+                          </div>
+                        </details>
                       )}
 
                       {pdfIsPremium && (
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                        <details className={foldableShell}>
+                          <summary className={foldableSummary}>
+                            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
                               <Sparkles className="w-4 h-4" /> Premium PDF Studio
                             </div>
-                            <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-gray-400">
                               Theme
-                            </span>
-                          </div>
+                              <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
+                            </div>
+                          </summary>
+                          <div className={foldableContent}>
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
@@ -3935,53 +3635,58 @@ export default function PlannerPage() {
                           <p className="text-[11px] text-gray-400 mt-2">
                             Applies to the PDF cover art, palette, and premium visuals.
                           </p>
-                        </div>
+                          </div>
+                        </details>
                       )}
 
-                      <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                      <details open className={foldableShell}>
+                        <summary className={foldableSummary}>
+                          <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
                             <MapPin className="w-4 h-4" /> Trip Map
                           </div>
-                          <a
-                            href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                              trip.destination
-                            )}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rahi-btn-ghost text-[10px]"
-                          >
-                            Open Map
-                          </a>
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                trip.destination
+                              )}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(event) => event.stopPropagation()}
+                              className="rahi-btn-ghost text-[10px]"
+                            >
+                              Open Map
+                            </a>
+                            <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
+                          </div>
+                        </summary>
+                        <div className={foldableContent}>
+                          <TripMap
+                            destination={trip.destination}
+                            stops={mapStops}
+                            mapboxToken={mapboxToken}
+                            premium={isPremium}
+                          />
+                          {mapEnriching && (
+                            <p className="mt-2 text-xs text-gray-400">Enhancing map locations...</p>
+                          )}
+                          {mapStops.length === 0 && (
+                            <p className="mt-3 text-xs text-gray-400">Add locations or regenerate for map pins.</p>
+                          )}
                         </div>
-                        <TripMap
-                          destination={trip.destination}
-                          stops={mapStops}
-                          mapboxToken={mapboxToken}
-                          premium={isPremium}
-                        />
-                        {mapEnriching && (
-                          <p className="text-xs text-gray-400 mt-2">
-                            Enhancing map locations...
-                          </p>
-                        )}
-                        {mapStops.length === 0 && (
-                          <p className="text-xs text-gray-400 mt-3">
-                            Add locations or regenerate for map pins.
-                          </p>
-                        )}
-                      </div>
+                      </details>
 
                       {stayFit && (
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
+                        <details className={foldableShell}>
+                          <summary className={foldableSummary}>
+                            <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
                               <Compass className="w-4 h-4" /> Stay Fit Score
                             </div>
-                            <span className="text-[10px] text-gray-400 uppercase tracking-[0.18em]">
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-gray-400">
                               Non-booking
-                            </span>
-                          </div>
+                              <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
+                            </div>
+                          </summary>
+                          <div className={foldableContent}>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div className="bg-black/20 p-3 rounded-lg">
                               <p className="text-xs text-gray-400">Score</p>
@@ -4037,7 +3742,8 @@ export default function PlannerPage() {
                               </p>
                             </div>
                           </div>
-                        </div>
+                          </div>
+                        </details>
                       )}
 
                       {trip?.days?.length > 0 && (
@@ -4751,4 +4457,4 @@ export default function PlannerPage() {
   );
 }
 
-// all perfect
+// All Perfect
