@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
+import { getRequestUser } from "@/lib/supabase/request-user";
 import { headers } from "next/headers";
 
-export async function POST() {
+export async function POST(req: Request) {
   const premiumEnabled = process.env.PREMIUM_ENABLED === "true";
   if (!premiumEnabled) {
     return NextResponse.json(
@@ -22,7 +23,7 @@ export async function POST() {
   }
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getRequestUser(req, supabase);
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getRequestUser } from "@/lib/supabase/request-user";
 
 const isTruthy = (value?: string | null) => {
   if (!value) return false;
@@ -19,7 +20,7 @@ const getPlanAmountPaise = () => {
   return Math.round(raw * 100);
 };
 
-export async function POST() {
+export async function POST(req: Request) {
   if (!isUpiEnabled()) {
     return NextResponse.json(
       { error: "UPI billing is not enabled yet." },
@@ -38,9 +39,7 @@ export async function POST() {
   }
 
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser(req, supabase);
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

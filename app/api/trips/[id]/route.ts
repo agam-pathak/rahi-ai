@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getRequestUser } from "@/lib/supabase/request-user";
 import { getClientId, rateLimit, rateLimitHeaders } from "@/lib/ai/guard";
 
 type RouteContext = {
@@ -17,7 +18,7 @@ export async function GET(
   const { id } = await params;
 
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getRequestUser(req, supabase);
 
   let query = supabase
     .from("trips")
@@ -66,7 +67,7 @@ export async function POST(
     const supabase = await createClient();
     const dataClient = supabaseAdmin ?? supabase;
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getRequestUser(req, supabase);
     if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },

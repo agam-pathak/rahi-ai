@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { getRequestUser } from "@/lib/supabase/request-user";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getClientId, rateLimit, rateLimitHeaders } from "@/lib/ai/guard";
@@ -23,9 +24,7 @@ export async function GET(req: Request) {
 
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser(req, supabase);
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: rlHeaders });
@@ -69,9 +68,7 @@ export async function POST(req: Request) {
 
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getRequestUser(req, supabase);
 
   if (!user) {
     return NextResponse.json(
@@ -125,4 +122,3 @@ export async function POST(req: Request) {
 
   return NextResponse.json(data, { headers: rlHeaders });
 }
-

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getRequestUser } from "@/lib/supabase/request-user";
 import { getClientId, rateLimit, rateLimitHeaders } from "@/lib/ai/guard";
 
 type RouteContext = {
@@ -91,7 +92,7 @@ export async function POST(req: Request, { params }: RouteContext) {
 
     const supabase = await createClient();
     const dataClient = supabaseAdmin ?? supabase;
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getRequestUser(req, supabase);
     if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -210,7 +211,7 @@ export async function GET(req: Request, { params }: RouteContext) {
     const { id } = await params;
     const supabase = await createClient();
     const dataClient = supabaseAdmin ?? supabase;
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getRequestUser(req, supabase);
     if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
@@ -294,7 +295,7 @@ export async function DELETE(req: Request, { params }: RouteContext) {
 
     const supabase = await createClient();
     const dataClient = supabaseAdmin ?? supabase;
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getRequestUser(req, supabase);
     if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },

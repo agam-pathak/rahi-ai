@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getRequestUser } from "@/lib/supabase/request-user";
 import { TripSchema } from "@/lib/schemas/trip.schema";
 import { buildTripPrompt } from "@/lib/ai/buildTripPrompt";
 import {
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
     }
 
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getRequestUser(req, supabase);
 
     if (!user) {
       return NextResponse.json(

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getRequestUser } from "@/lib/supabase/request-user";
 import { TripSchema } from "@/lib/schemas/trip.schema";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getClientId, rateLimit, rateLimitHeaders } from "@/lib/ai/guard";
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
   }
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getRequestUser(req, supabase);
 
     if (!user) {
       return NextResponse.json(
