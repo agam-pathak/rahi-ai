@@ -41,6 +41,8 @@ Required for features:
 Recommended:
 - `SUPABASE_SERVICE_ROLE_KEY` (server-only admin fallback)
 - `PREMIUM_ENABLED` / `NEXT_PUBLIC_PREMIUM_ENABLED` (billing flags)
+- `BASIC_TRIAL_DAYS` (default: `14`)
+- `STRIPE_PRICE_ID_PREMIUM` and `STRIPE_PRICE_ID_PRO` (multi-tier checkout)
 
 ## Supabase RLS
 

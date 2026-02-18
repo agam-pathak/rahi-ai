@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { getRequestUser } from "@/lib/supabase/request-user";
+import { normalizePlanTier } from "@/lib/billing/tier";
 import { headers } from "next/headers";
 
 export async function POST(req: Request) {
@@ -13,11 +14,27 @@ export async function POST(req: Request) {
     );
   }
   const secretKey = process.env.STRIPE_SECRET_KEY;
-  const priceId = process.env.STRIPE_PRICE_ID;
+  const premiumPriceId = process.env.STRIPE_PRICE_ID_PREMIUM ?? process.env.STRIPE_PRICE_ID;
+  const proPriceId = process.env.STRIPE_PRICE_ID_PRO;
+
+  let body: any = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+  const requestedTier = normalizePlanTier(body?.plan);
+  const checkoutTier = requestedTier === "pro" ? "pro" : "premium";
+  const priceId = checkoutTier === "pro" ? proPriceId : premiumPriceId;
 
   if (!secretKey || !priceId) {
     return NextResponse.json(
-      { error: "Stripe not configured" },
+      {
+        error:
+          checkoutTier === "pro"
+            ? "Pro billing is not configured"
+            : "Stripe not configured",
+      },
       { status: 500 }
     );
   }
@@ -41,9 +58,12 @@ export async function POST(req: Request) {
     line_items: [{ price: priceId, quantity: 1 }],
     customer_email: user.email ?? undefined,
     client_reference_id: user.id,
-    success_url: `${baseUrl}/planner?billing=success`,
-    cancel_url: `${baseUrl}/planner?billing=cancel`,
+    metadata: {
+      requested_plan: checkoutTier,
+    },
+    success_url: `${baseUrl}/planner?billing=success&tier=${checkoutTier}`,
+    cancel_url: `${baseUrl}/planner?billing=cancel&tier=${checkoutTier}`,
   });
 
-  return NextResponse.json({ url: session.url });
+  return NextResponse.json({ url: session.url, tier: checkoutTier });
 }

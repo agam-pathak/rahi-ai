@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getRequestUser } from "@/lib/supabase/request-user";
+import type { PlanTier } from "@/lib/billing/tier";
 
 const isTruthy = (value?: string | null) => {
   if (!value) return false;
@@ -20,6 +21,37 @@ const isPaidStatus = (value: unknown) =>
 const amountInrFromPaise = (value: unknown) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric / 100 : 0;
+};
+
+const upsertProfilePlan = async ({
+  userId,
+  email,
+  tier,
+  dataClient,
+}: {
+  userId: string;
+  email: string | null;
+  tier: PlanTier;
+  dataClient: any;
+}) => {
+  const isPaid = tier === "premium" || tier === "pro";
+  const basePayload = {
+    id: userId,
+    email,
+    is_premium: isPaid,
+  };
+  const { error } = await dataClient
+    .from("profiles")
+    .upsert({
+      ...basePayload,
+      plan_tier: tier,
+    });
+  if (!error) return null;
+
+  const fallback = await dataClient
+    .from("profiles")
+    .upsert(basePayload);
+  return fallback.error ?? null;
 };
 
 export async function GET(req: Request) {
@@ -115,13 +147,12 @@ export async function GET(req: Request) {
 
   if (paid) {
     const dataClient = supabaseAdmin ?? supabase;
-    const { error } = await dataClient
-      .from("profiles")
-      .upsert({
-        id: user.id,
-        email: user.email ?? null,
-        is_premium: true,
-      });
+    const error = await upsertProfilePlan({
+      userId: user.id,
+      email: user.email ?? null,
+      tier: "premium",
+      dataClient,
+    });
 
     if (error) {
       return NextResponse.json(

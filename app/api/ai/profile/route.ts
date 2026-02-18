@@ -1,5 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { getRequestUser } from "@/lib/supabase/request-user";
+import {
+  computeTrialWindow,
+  getPlanCapabilities,
+  resolvePlanTier,
+  tierAtLeast,
+} from "@/lib/billing/tier";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getClientId, rateLimit, rateLimitHeaders } from "@/lib/ai/guard";
@@ -52,7 +58,31 @@ export async function GET(req: Request) {
     profile = inserted;
   }
 
-  return NextResponse.json(profile, { headers: rlHeaders });
+  const createdAt =
+    (typeof profile?.created_at === "string" ? profile.created_at : null) ??
+    (typeof (user as any)?.created_at === "string" ? (user as any).created_at : null);
+  const trialDays = Number(process.env.BASIC_TRIAL_DAYS ?? "14");
+  const trial = computeTrialWindow(createdAt, trialDays);
+  const planTier = resolvePlanTier({
+    explicitTier: (profile as any)?.plan_tier,
+    isPremium: Boolean((profile as any)?.is_premium),
+    trialActive: trial.trialActive,
+  });
+  const capabilities = getPlanCapabilities(planTier);
+
+  return NextResponse.json(
+    {
+      ...profile,
+      plan_tier: planTier,
+      is_premium: tierAtLeast(planTier, "premium"),
+      trial_status: trial.trialStatus,
+      trial_active: trial.trialActive,
+      trial_days_left: trial.trialDaysLeft,
+      trial_ends_at: trial.trialEndsAt,
+      capabilities,
+    },
+    { headers: rlHeaders }
+  );
 }
 
 export async function POST(req: Request) {

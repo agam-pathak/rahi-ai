@@ -44,6 +44,12 @@ import {
 } from "./utils";
 import { useSyncedSearchParams } from "./hooks/useSyncedSearchParams";
 import { usePlannerToast } from "./hooks/usePlannerToast";
+import {
+  getPlanCapabilities,
+  normalizePlanTier,
+  type PlanTier,
+  type TrialStatus,
+} from "@/lib/billing/tier";
 
 const TripMap = dynamic(() => import("@/components/maps/TripMap"), { ssr: false });
 
@@ -237,6 +243,10 @@ export default function PlannerPage() {
   const [toggleLoading, setToggleLoading] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
   const [isPremium, setIsPremium] = useState(false);
+  const [planTier, setPlanTier] = useState<PlanTier>("free");
+  const [trialStatus, setTrialStatus] = useState<TrialStatus>("none");
+  const [trialDaysLeft, setTrialDaysLeft] = useState(0);
+  const [trialEndsAt, setTrialEndsAt] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [fixingTrip, setFixingTrip] = useState(false);
   const [mapEnriching, setMapEnriching] = useState(false);
@@ -340,7 +350,7 @@ export default function PlannerPage() {
       showToast("Share link not available yet.");
       return;
     }
-    if (trip.is_public === false && !pdfIsPremium) {
+    if (trip.is_public === false && !planCapabilities.privateSharing) {
       showToast("Private sharing is Premium-only. Upgrade to share securely.");
       return;
     }
@@ -443,7 +453,11 @@ export default function PlannerPage() {
 
       const data = await res.json();
       if (data?.paid) {
+        setPlanTier("premium");
         setIsPremium(true);
+        setTrialStatus("none");
+        setTrialDaysLeft(0);
+        setTrialEndsAt(null);
         setHasStripeCustomer(false);
         setUpiStatus("paid");
         showToast("Payment confirmed. Premium unlocked.");
@@ -463,11 +477,11 @@ export default function PlannerPage() {
     }
   };
 
-  const startUpgrade = async () => {
+  const startUpgrade = async (targetPlan: "premium" | "pro" = "premium") => {
     if (billingLoading) return;
     setBillingLoading(true);
     try {
-      if (upiEnabled) {
+      if (upiEnabled && targetPlan === "premium") {
         const res = await fetch("/api/billing/upi/initiate", { method: "POST" });
         if (!res.ok) {
           const msg = await parseApiError(res);
@@ -505,7 +519,16 @@ export default function PlannerPage() {
         return;
       }
 
-      const res = await fetch("/api/billing/checkout", { method: "POST" });
+      if (upiEnabled && targetPlan === "pro" && !premiumEnabled) {
+        showToast("Pro checkout is unavailable right now.");
+        return;
+      }
+
+      const res = await fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: targetPlan }),
+      });
       if (!res.ok) {
         const msg = await parseApiError(res);
         showToast(msg || "Billing unavailable.");
@@ -526,7 +549,7 @@ export default function PlannerPage() {
 
   const manageBilling = async () => {
     if (!hasStripeCustomer) {
-      showToast("Premium is active. Billing portal is not available for UPI plans.");
+      showToast("Paid plan is active. Billing portal is not available for UPI plans.");
       return;
     }
     if (billingLoading) return;
@@ -658,7 +681,20 @@ export default function PlannerPage() {
     process.env.NODE_ENV !== "production" &&
     process.env.NEXT_PUBLIC_ALLOW_PREMIUM_PREVIEW === "true";
   const premiumPreview = allowPremiumPreview && searchParams.get("premium") === "1";
-  const pdfIsPremium = isPremium || premiumPreview;
+  const effectiveTier: PlanTier = premiumPreview ? "premium" : planTier;
+  const planCapabilities = useMemo(
+    () => getPlanCapabilities(effectiveTier),
+    [effectiveTier]
+  );
+  const pdfIsPremium = planCapabilities.premiumPdf;
+  const isPro = effectiveTier === "pro";
+  const tierBadgeLabel = effectiveTier === "pro"
+    ? "PRO"
+    : effectiveTier === "premium"
+      ? "PREMIUM"
+      : effectiveTier === "basic"
+        ? "BASIC"
+        : "FREE";
   const pdfDebug = searchParams.get("pdfdebug") === "1";
   const premiumEase = [0.16, 1, 0.3, 1] as const;
 
@@ -735,10 +771,38 @@ export default function PlannerPage() {
     fetch("/api/ai/profile")
       .then((res) => res.json())
       .then((data) => {
-        setIsPremium(Boolean(data?.is_premium));
+        const normalizedTier = normalizePlanTier(data?.plan_tier);
+        const derivedTier: PlanTier = normalizedTier
+          ? normalizedTier
+          : Boolean(data?.is_premium)
+            ? "premium"
+            : data?.trial_active
+              ? "basic"
+              : "free";
+        setPlanTier(derivedTier);
+        setIsPremium(derivedTier === "premium" || derivedTier === "pro");
         setHasStripeCustomer(Boolean(data?.stripe_customer_id));
+        setTrialStatus(
+          data?.trial_status === "active" || data?.trial_status === "expired"
+            ? data.trial_status
+            : "none"
+        );
+        setTrialDaysLeft(
+          Number.isFinite(Number(data?.trial_days_left))
+            ? Math.max(0, Number(data.trial_days_left))
+            : 0
+        );
+        setTrialEndsAt(
+          typeof data?.trial_ends_at === "string" && data.trial_ends_at
+            ? data.trial_ends_at
+            : null
+        );
       })
       .catch(() => {
+        setPlanTier("free");
+        setTrialStatus("none");
+        setTrialDaysLeft(0);
+        setTrialEndsAt(null);
         setIsPremium(false);
         setHasStripeCustomer(false);
       });
@@ -796,10 +860,10 @@ export default function PlannerPage() {
 
   const shareUrl = useMemo(() => {
     if (!trip?.share_code) return "";
-    if (trip.is_public === false && !pdfIsPremium) return "";
+    if (trip.is_public === false && !planCapabilities.privateSharing) return "";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     return origin ? `${origin}/trip/${trip.share_code}` : "";
-  }, [trip?.share_code, trip?.is_public, pdfIsPremium]);
+  }, [trip?.share_code, trip?.is_public, planCapabilities.privateSharing]);
 
   const mapStops = useMemo(() => {
     if (!trip?.days || !Array.isArray(trip.days)) return [];
@@ -976,7 +1040,7 @@ export default function PlannerPage() {
   }, [prepChecklist, trip?.id]);
 
   useEffect(() => {
-    if (!trip?.id || !isPremium) return;
+    if (!trip?.id || !planCapabilities.signaturePlans) return;
     if (!Object.keys(prepChecklist).length) return;
     const current = trip.meta?.prep_checklist ?? {};
     if (JSON.stringify(current) !== JSON.stringify(prepChecklist)) {
@@ -1004,7 +1068,7 @@ export default function PlannerPage() {
         window.clearTimeout(checklistSaveRef.current);
       }
     };
-  }, [prepChecklist, trip, isPremium]);
+  }, [prepChecklist, trip, planCapabilities.signaturePlans]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -1995,6 +2059,10 @@ export default function PlannerPage() {
 
   const optimizeTripRoutes = async () => {
     if (!trip || optimizingRoutes) return;
+    if (!planCapabilities.routeOptimization) {
+      showToast("Route optimization is available on Premium and Pro.");
+      return;
+    }
     if (!premiumInsights?.canOptimize) {
       showToast("Not enough location data to optimize routes.");
       return;
@@ -2055,6 +2123,10 @@ export default function PlannerPage() {
 
   const optimizeDayPlan = async (dayNumber: number) => {
     if (!trip || optimizingDay) return;
+    if (!planCapabilities.dayOptimization) {
+      showToast("Day optimization is a Pro feature.");
+      return;
+    }
     const day = trip.days.find((entry) => entry.day_number === dayNumber);
     if (!day) return;
 
@@ -2145,6 +2217,10 @@ export default function PlannerPage() {
 
   const swapExpensiveActivity = async () => {
     if (!trip || replacingActivityId) return;
+    if (!planCapabilities.activitySwap) {
+      showToast("Activity swap assistant is a Pro feature.");
+      return;
+    }
     const expensive = premiumInsights?.expensiveActivity;
     if (!expensive?.activity?.id) {
       showToast("No pricey activity to swap yet.");
@@ -2200,6 +2276,67 @@ export default function PlannerPage() {
 
   const handleVoiceCommand = (text: string) => {
     const lower = text.toLowerCase();
+
+    if (/stop speaking|be quiet|silence|stop voice/.test(lower)) {
+      if (typeof window !== "undefined") {
+        window.speechSynthesis.cancel();
+      }
+      setVoiceStatus("idle");
+      showToast("Voice playback stopped.");
+      return true;
+    }
+
+    if (
+      /(turn|switch)\s+(off|disable|mute)\s+(voice|speech|tts)/.test(lower) ||
+      /mute\s+(voice|assistant)/.test(lower)
+    ) {
+      setVoiceSettings((prev) => ({ ...prev, tts: false }));
+      if (typeof window !== "undefined") {
+        window.speechSynthesis.cancel();
+      }
+      setVoiceStatus("idle");
+      showToast("Voice replies turned off.");
+      return true;
+    }
+
+    if (
+      /(turn|switch)\s+(on|enable)\s+(voice|speech|tts)/.test(lower) ||
+      /unmute\s+(voice|assistant)/.test(lower)
+    ) {
+      setVoiceSettings((prev) => ({ ...prev, tts: true }));
+      showToast("Voice replies turned on.");
+      return true;
+    }
+
+    if (
+      /(turn|switch)\s+(on|enable)\s+auto\s*send/.test(lower) ||
+      /auto\s*send\s+(on|enable)/.test(lower)
+    ) {
+      setVoiceSettings((prev) => ({ ...prev, autoSend: true }));
+      showToast("Auto send enabled.");
+      return true;
+    }
+
+    if (
+      /(turn|switch)\s+(off|disable)\s+auto\s*send/.test(lower) ||
+      /auto\s*send\s+(off|disable)/.test(lower)
+    ) {
+      setVoiceSettings((prev) => ({ ...prev, autoSend: false }));
+      showToast("Auto send disabled.");
+      return true;
+    }
+
+    if (/switch.*hindi|hindi language|language hindi/.test(lower)) {
+      setVoiceSettings((prev) => ({ ...prev, lang: "hi-IN" }));
+      showToast("Voice language set to Hindi.");
+      return true;
+    }
+
+    if (/switch.*english|english language|language english/.test(lower)) {
+      setVoiceSettings((prev) => ({ ...prev, lang: "en-IN" }));
+      showToast("Voice language set to English.");
+      return true;
+    }
 
     if (/download\s+(the\s+)?(pdf|itinerary|plan)|export\s+pdf|save\s+pdf/.test(lower)) {
       downloadPDF();
@@ -2325,7 +2462,7 @@ export default function PlannerPage() {
         );
       } else {
         if (isVoice) setVoiceStatus("idle");
-        if (!isVoice) speakWithHeart(aiMsg, lang);
+        if (!isVoice && voiceSettings.tts) speakWithHeart(aiMsg, lang);
       }
 
       setChatMessages((prev) => [...prev, "Rahi.AI: " + aiMsg]);
@@ -3276,6 +3413,21 @@ export default function PlannerPage() {
                           {syncStatusLabel}
                         </span>
                       )}
+                      <span className="rounded-full border border-teal-400/40 bg-teal-500/10 px-3 py-1 text-[10px] font-bold tracking-[0.12em] text-teal-200">
+                        {tierBadgeLabel}
+                      </span>
+                      {effectiveTier === "basic" && trialStatus === "active" && (
+                        <span
+                          className="rounded-full border border-amber-400/30 bg-amber-500/10 px-3 py-1 text-[10px] font-semibold text-amber-200"
+                          title={
+                            trialEndsAt
+                              ? `Trial ends on ${new Date(trialEndsAt).toLocaleDateString("en-IN")}`
+                              : undefined
+                          }
+                        >
+                          Trial {trialDaysLeft}d left
+                        </span>
+                      )}
                       {trip.id && hasUnsavedChanges && !savingChanges && (
                         <button
                           onClick={() => void persistTripResult(trip, { reason: "manual" })}
@@ -3295,7 +3447,7 @@ export default function PlannerPage() {
                           </button>
                         ) : (
                           <span className="rounded-full border border-emerald-400/45 bg-emerald-500/12 px-3 py-1.5 text-xs font-semibold text-emerald-200">
-                            Premium Active (UPI)
+                            {isPro ? "Pro" : "Premium"} Active (UPI)
                           </span>
                         )
                       ) : upiEnabled ? (
@@ -3304,21 +3456,21 @@ export default function PlannerPage() {
                             setUpiOpen(true);
                             setUpiError(null);
                             if (!upiPaymentId) {
-                              void startUpgrade();
+                              void startUpgrade("premium");
                             }
                           }}
                           disabled={billingLoading}
                           className="rahi-btn-primary px-4 py-2 text-sm disabled:opacity-60"
                         >
-                          {billingLoading ? "Opening..." : "Pay via UPI"}
+                          {billingLoading ? "Opening..." : "Upgrade Premium"}
                         </button>
                       ) : premiumEnabled ? (
                         <button
-                          onClick={startUpgrade}
+                          onClick={() => void startUpgrade("premium")}
                           disabled={billingLoading}
                           className="rahi-btn-primary px-4 py-2 text-sm disabled:opacity-60"
                         >
-                          {billingLoading ? "Opening..." : "Upgrade"}
+                          {billingLoading ? "Opening..." : "Upgrade Premium"}
                         </button>
                       ) : (
                         <button
@@ -3326,6 +3478,15 @@ export default function PlannerPage() {
                           className="rahi-btn-primary px-4 py-2 text-sm"
                         >
                           Premium Soon
+                        </button>
+                      )}
+                      {premiumEnabled && !isPro && (
+                        <button
+                          onClick={() => void startUpgrade("pro")}
+                          disabled={billingLoading}
+                          className="rahi-btn-secondary px-4 py-2 text-sm disabled:opacity-60"
+                        >
+                          {billingLoading ? "Opening..." : "Go Pro"}
                         </button>
                       )}
                       <button
@@ -3446,7 +3607,7 @@ export default function PlannerPage() {
                           </div>
                         </summary>
                         <div className={foldableContent}>
-                        {isPremium ? (
+                        {planCapabilities.premiumInsights ? (
                           <>
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                               <div className="bg-black/20 p-3 rounded-lg">
@@ -3483,7 +3644,11 @@ export default function PlannerPage() {
                               <button
                                 type="button"
                                 onClick={optimizeTripRoutes}
-                                disabled={!premiumInsights?.canOptimize || optimizingRoutes}
+                                disabled={
+                                  !planCapabilities.routeOptimization ||
+                                  !premiumInsights?.canOptimize ||
+                                  optimizingRoutes
+                                }
                                 className="rahi-btn-secondary text-xs disabled:opacity-60"
                               >
                                 {optimizingRoutes ? "Optimizing..." : "Optimize routes"}
@@ -3491,10 +3656,14 @@ export default function PlannerPage() {
                               <button
                                 type="button"
                                 onClick={swapExpensiveActivity}
-                                disabled={!premiumInsights?.expensiveActivity || Boolean(replacingActivityId)}
+                                disabled={
+                                  !planCapabilities.activitySwap ||
+                                  !premiumInsights?.expensiveActivity ||
+                                  Boolean(replacingActivityId)
+                                }
                                 className="rahi-btn-ghost text-xs disabled:opacity-60"
                               >
-                                Swap pricey stop
+                                Swap pricey stop {planCapabilities.activitySwap ? "" : "(Pro)"}
                               </button>
                             </div>
                             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-400">
@@ -3535,7 +3704,7 @@ export default function PlannerPage() {
                           </div>
                         </summary>
                         <div className={foldableContent}>
-                        {isPremium ? (
+                        {planCapabilities.signaturePlans ? (
                           <div className="grid lg:grid-cols-3 gap-4">
                             <div className="bg-black/20 p-4 rounded-lg">
                               <div className="flex items-center gap-2 text-[11px] uppercase text-teal-200 font-semibold">
@@ -3752,7 +3921,7 @@ export default function PlannerPage() {
                             destination={trip.destination}
                             stops={mapStops}
                             mapboxToken={mapboxToken}
-                            premium={isPremium}
+                            premium={planCapabilities.premiumInsights}
                           />
                           {mapEnriching && (
                             <p className="mt-2 text-xs text-gray-400">Enhancing map locations...</p>
@@ -3864,10 +4033,19 @@ export default function PlannerPage() {
                             <button
                               type="button"
                               onClick={() => optimizeDayPlan(selectedDay)}
-                              disabled={optimizingDay || loading || streaming}
+                              disabled={
+                                !planCapabilities.dayOptimization ||
+                                optimizingDay ||
+                                loading ||
+                                streaming
+                              }
                               className="rahi-btn-secondary text-xs px-4 py-2 disabled:opacity-60"
                             >
-                              {optimizingDay ? "Optimizing..." : "Optimize day"}
+                              {optimizingDay
+                                ? "Optimizing..."
+                                : planCapabilities.dayOptimization
+                                  ? "Optimize day"
+                                  : "Optimize day (Pro)"}
                             </button>
                             <span className="text-[11px] text-gray-500">
                               Uses travel time + weather

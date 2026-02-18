@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { normalizePlanTier, type PlanTier } from "@/lib/billing/tier";
 import RahiBackground from "@/components/RahiBackground";
 import ThemeToggle from "@/components/ThemeToggle";
 import { CheckCircle2, Lock, LogOut, Mail, ShieldCheck, UserCircle2 } from "lucide-react";
@@ -15,6 +16,11 @@ type Profile = {
   bio?: string | null;
   avatar_url?: string | null;
   is_premium?: boolean | null;
+  plan_tier?: string | null;
+  trial_status?: "none" | "active" | "expired" | null;
+  trial_active?: boolean | null;
+  trial_days_left?: number | null;
+  trial_ends_at?: string | null;
   stripe_customer_id?: string | null;
   created_at?: string | null;
 };
@@ -84,6 +90,21 @@ export default function ProfilePage() {
       .map((part) => part[0]?.toUpperCase())
       .join("");
   }, [profile]);
+
+  const planTier = useMemo<PlanTier>(() => {
+    const tier = normalizePlanTier(profile?.plan_tier);
+    if (tier) return tier;
+    if (profile?.is_premium) return "premium";
+    if (profile?.trial_active) return "basic";
+    return "free";
+  }, [profile]);
+
+  const planLabel = useMemo(() => {
+    if (planTier === "pro") return "Pro";
+    if (planTier === "premium") return "Premium";
+    if (planTier === "basic") return "Basic Trial";
+    return "Free";
+  }, [planTier]);
 
   const saveProfile = async () => {
     if (!profile) return;
@@ -279,8 +300,20 @@ export default function ProfilePage() {
           </div>
           <div className="md:ml-auto flex flex-wrap items-center gap-2">
             <span className="px-3 py-1 rounded-full border border-white/10 text-xs">
-              {profile?.is_premium ? "Premium Member" : "Free Explorer"}
+              {planLabel}
             </span>
+            {planTier === "basic" && profile?.trial_status === "active" && (
+              <span
+                className="px-3 py-1 rounded-full border border-amber-400/30 bg-amber-500/10 text-xs text-amber-200"
+                title={
+                  profile?.trial_ends_at
+                    ? `Trial ends on ${new Date(profile.trial_ends_at).toLocaleDateString("en-IN")}`
+                    : undefined
+                }
+              >
+                {Math.max(0, Number(profile?.trial_days_left || 0))} trial days left
+              </span>
+            )}
             {profile?.created_at && (
               <span className="px-3 py-1 rounded-full border border-white/10 text-xs text-gray-400">
                 Joined {new Date(profile.created_at).toLocaleDateString("en-IN")}
