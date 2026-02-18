@@ -8,3 +8,5 @@ Sentry.init({
   environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
   enabled: process.env.NODE_ENV === "production",
 });
+
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

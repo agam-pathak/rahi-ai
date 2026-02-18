@@ -11,7 +11,6 @@ const sentryOptions = {
   authToken: process.env.SENTRY_AUTH_TOKEN,
   silent: true,
   hideSourceMaps: true,
-  disableLogger: true,
 };
 
 export default withSentryConfig(nextConfig, sentryOptions);
