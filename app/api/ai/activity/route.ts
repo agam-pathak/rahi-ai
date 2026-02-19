@@ -37,11 +37,13 @@ export async function POST(req: Request) {
       : "";
   const day_number = body?.day_number;
   const budget = body?.budget;
+  const max_cost = body?.max_cost;
   const order_index = body?.order_index;
   const avoid_titles = body?.avoid_titles;
 
   const dayNum = Number(day_number);
   const budgetNum = Number(budget);
+  const maxCostNum = Number(max_cost);
   const orderIndexNum = Number(order_index);
 
   if (
@@ -82,6 +84,7 @@ You are a backend API that outputs JSON.
 Generate ONE replacement activity for DAY ${dayNum} in ${destination}.
 Total budget (INR): ${budgetNum}
 Interests: ${interests}
+${Number.isFinite(maxCostNum) && maxCostNum > 0 ? `Preferred max cost for this replacement (INR): ${Math.round(maxCostNum)}` : ""}
 
 Replace this activity title:
 ${current_title || "Unknown"}
@@ -93,6 +96,7 @@ STRICT RULES:
 - Return ONLY valid JSON
 - Do NOT include markdown, comments, or explanations
 - Costs must be realistic numbers (INR)
+${Number.isFinite(maxCostNum) && maxCostNum > 0 ? `- Keep estimated_cost at or below INR ${Math.round(maxCostNum)} whenever practical` : ""}
 
 OUTPUT JSON SHAPE:
 {

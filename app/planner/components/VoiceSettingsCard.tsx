@@ -93,6 +93,16 @@ export default function VoiceSettingsCard({
             <option value="hi-IN">Hindi (IN)</option>
           </select>
         </div>
+
+        <div className="rounded-lg border border-teal-500/20 bg-teal-500/10 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-teal-200">
+            Voice Concierge Pro
+          </p>
+          <p className="mt-1 text-[11px] text-gray-300">
+            Try commands: "dynamic replan", "run budget copilot", "optimize day 2", or
+            "concierge brief day 1".
+          </p>
+        </div>
       </div>
     </div>
   );

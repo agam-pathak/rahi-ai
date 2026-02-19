@@ -62,6 +62,8 @@ const PREMIUM_CHECKLIST = [
   { id: "connect", label: "Local SIM / roaming ready" },
 ];
 const ACTIVITY_TYPE_COUNT = 5;
+const WEATHER_RISK_PATTERN = /rain|storm|drizzle|shower|thunder|snow|hail/i;
+const OUTDOOR_ACTIVITY_TYPES = new Set(["sightseeing", "experience"]);
 type IndiaTemplatePreset = {
   id: string;
   title: string;
@@ -252,6 +254,10 @@ export default function PlannerPage() {
   const [mapEnriching, setMapEnriching] = useState(false);
   const [optimizingRoutes, setOptimizingRoutes] = useState(false);
   const [optimizingDay, setOptimizingDay] = useState(false);
+  const [dynamicReplanning, setDynamicReplanning] = useState(false);
+  const [budgetCopilotRunning, setBudgetCopilotRunning] = useState(false);
+  const [lastReplanSummary, setLastReplanSummary] = useState<string | null>(null);
+  const [lastBudgetCopilotSummary, setLastBudgetCopilotSummary] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState<number>(1);
   const [billingLoading, setBillingLoading] = useState(false);
   const [hasStripeCustomer, setHasStripeCustomer] = useState(false);
@@ -1953,70 +1959,214 @@ export default function PlannerPage() {
     }
   };
 
-  const replaceActivity = async (dayNumber: number, activityId: string) => {
-    if (!trip) return;
-    if (replacingActivityId) return;
+  const getTripSpend = useCallback((sourceTrip: Trip) => {
+    return sourceTrip.days.reduce((sum, day) => {
+      const daySpend = day.activities.reduce(
+        (acc, activity) => acc + (Number(activity.estimated_cost) || 0),
+        0
+      );
+      return sum + daySpend;
+    }, 0);
+  }, []);
 
-    const targetDay = trip.days.find((day) => day.day_number === dayNumber);
-    if (!targetDay) return;
-    const targetActivity = targetDay.activities.find((act) => act.id === activityId);
-    if (!targetActivity) return;
+  const normalizeActivityOrder = useCallback(
+    (activities: Activity[]) =>
+      activities.map((activity, index) => ({
+        ...activity,
+        order_index: index,
+      })),
+    []
+  );
 
-    setStreamError(null);
-    setReplacingActivityId(activityId);
+  const orderActivitiesByDistance = useCallback(
+    (activities: Activity[]) => {
+      const sorted = [...activities].sort(
+        (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+      );
+      const withCoords = sorted.filter((activity) => getActivityCoord(activity));
+      if (withCoords.length < 2) {
+        return { activities: sorted, changed: false };
+      }
 
-    try {
+      const withoutCoords = sorted.filter((activity) => !getActivityCoord(activity));
+      const remaining = [...withCoords];
+      const ordered: Activity[] = [];
+      ordered.push(remaining.shift()!);
+
+      while (remaining.length > 0) {
+        const last = ordered[ordered.length - 1];
+        const lastCoord = getActivityCoord(last);
+        if (!lastCoord) {
+          ordered.push(...remaining);
+          break;
+        }
+
+        let bestIndex = 0;
+        let bestDist = Infinity;
+        remaining.forEach((candidate, index) => {
+          const coord = getActivityCoord(candidate);
+          if (!coord) return;
+          const dist = haversineKm(lastCoord, coord);
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestIndex = index;
+          }
+        });
+        const [next] = remaining.splice(bestIndex, 1);
+        ordered.push(next);
+      }
+
+      const merged = [...ordered, ...withoutCoords];
+      const changed = merged.some((activity, index) => activity.id !== sorted[index]?.id);
+      return { activities: normalizeActivityOrder(merged), changed };
+    },
+    [normalizeActivityOrder]
+  );
+
+  const applyWeatherAwareOrder = useCallback(
+    (activities: Activity[], weatherText: string) => {
+      const sorted = [...activities].sort(
+        (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+      );
+      if (!WEATHER_RISK_PATTERN.test(weatherText)) {
+        return { activities: sorted, changed: false };
+      }
+
+      const indoor = sorted.filter(
+        (activity) =>
+          !OUTDOOR_ACTIVITY_TYPES.has(String(activity.type ?? "").toLowerCase())
+      );
+      const outdoor = sorted.filter((activity) =>
+        OUTDOOR_ACTIVITY_TYPES.has(String(activity.type ?? "").toLowerCase())
+      );
+      const merged = [...indoor, ...outdoor];
+      const changed = merged.some((activity, index) => activity.id !== sorted[index]?.id);
+      return { activities: normalizeActivityOrder(merged), changed };
+    },
+    [normalizeActivityOrder]
+  );
+
+  const requestActivityReplacement = useCallback(
+    async ({
+      sourceTrip,
+      dayNumber,
+      activityId,
+      maxCost,
+    }: {
+      sourceTrip: Trip;
+      dayNumber: number;
+      activityId: string;
+      maxCost?: number;
+    }) => {
+      const targetDay = sourceTrip.days.find((day) => day.day_number === dayNumber);
+      if (!targetDay) return null;
+      const targetActivity = targetDay.activities.find((act) => act.id === activityId);
+      if (!targetActivity) return null;
+
       const avoidTitles = targetDay.activities
         .filter((a) => a.id !== activityId)
         .map((a) => a.title)
         .filter(Boolean);
-      const effectiveBudget = Number.isFinite(trip.meta?.total_estimated_budget)
-        ? Number(trip.meta.total_estimated_budget)
+      const effectiveBudget = Number.isFinite(sourceTrip.meta?.total_estimated_budget)
+        ? Number(sourceTrip.meta.total_estimated_budget)
         : parseBudget(budget);
       const effectiveInterests =
         interests.trim() ||
-        trip.meta?.primary_vibes?.join(", ") ||
+        sourceTrip.meta?.primary_vibes?.join(", ") ||
         "sightseeing, food, culture";
+      const maxCostHint =
+        Number.isFinite(maxCost) && Number(maxCost) > 0
+          ? Math.round(Number(maxCost))
+          : undefined;
 
       const res = await fetch("/api/ai/activity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          destination: trip.destination || destination,
+          destination: sourceTrip.destination || destination,
           day_number: dayNumber,
           budget: effectiveBudget,
           interests: effectiveInterests,
           current_title: targetActivity.title,
           order_index: targetActivity.order_index,
           avoid_titles: avoidTitles,
+          ...(maxCostHint ? { max_cost: maxCostHint } : {}),
         }),
       });
 
       if (!res.ok) {
         const msg = await parseApiError(res);
-        showToast(msg);
-        return;
+        throw new Error(msg);
       }
 
       const newActivity = await res.json();
       const updatedTrip = applyBudgetToTrip({
-        ...trip,
-        days: trip.days.map((day) => {
+        ...sourceTrip,
+        days: sourceTrip.days.map((day) => {
           if (day.day_number !== dayNumber) return day;
           return {
             ...day,
             activities: day.activities.map((act) =>
-              act.id === activityId ? newActivity : act
+              act.id === activityId
+                ? {
+                    ...newActivity,
+                    id: newActivity?.id || createLocalId(),
+                    order_index: Number.isFinite(newActivity?.order_index)
+                      ? Number(newActivity.order_index)
+                      : act.order_index,
+                  }
+                : act
             ),
           };
         }),
       });
+      return updatedTrip;
+    },
+    [budget, destination, interests, parseApiError]
+  );
+
+  type ReplaceActivityOptions = {
+    maxCost?: number;
+    silent?: boolean;
+    persist?: boolean;
+  };
+
+  const replaceActivity = async (
+    dayNumber: number,
+    activityId: string,
+    options?: ReplaceActivityOptions
+  ) => {
+    if (!trip) return null;
+    if (replacingActivityId) return null;
+
+    setStreamError(null);
+    setReplacingActivityId(activityId);
+
+    try {
+      const updatedTrip = await requestActivityReplacement({
+        sourceTrip: trip,
+        dayNumber,
+        activityId,
+        maxCost: options?.maxCost,
+      });
+      if (!updatedTrip) {
+        if (!options?.silent) showToast("Activity not found.");
+        return null;
+      }
       setTrip(updatedTrip);
       updateHistoryEntry(updatedTrip);
-      await persistTripResult(updatedTrip);
-      showToast("Activity replaced.");
-    } catch {
-      showToast("Failed to replace activity.");
+      if (options?.persist !== false) {
+        await persistTripResult(updatedTrip);
+      }
+      if (!options?.silent) {
+        showToast("Activity replaced.");
+      }
+      return updatedTrip;
+    } catch (error: any) {
+      if (!options?.silent) {
+        showToast(error?.message || "Failed to replace activity.");
+      }
+      return null;
     } finally {
       setReplacingActivityId(null);
     }
@@ -2069,43 +2219,17 @@ export default function PlannerPage() {
     }
     setOptimizingRoutes(true);
     try {
+      let optimizedDays = 0;
       const updatedDays = trip.days.map((day) => {
-        const sorted = [...day.activities].sort(
-          (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
-        );
-        const withCoords = sorted.filter((activity) => getActivityCoord(activity));
-        if (withCoords.length < 2) return day;
-        const withoutCoords = sorted.filter((activity) => !getActivityCoord(activity));
-        const remaining = [...withCoords];
-        const ordered: Activity[] = [];
-        ordered.push(remaining.shift()!);
-        while (remaining.length > 0) {
-          const last = ordered[ordered.length - 1];
-          const lastCoord = getActivityCoord(last);
-          if (!lastCoord) {
-            ordered.push(...remaining);
-            break;
-          }
-          let bestIndex = 0;
-          let bestDist = Infinity;
-          remaining.forEach((candidate, index) => {
-            const coord = getActivityCoord(candidate);
-            if (!coord) return;
-            const dist = haversineKm(lastCoord, coord);
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestIndex = index;
-            }
-          });
-          const [next] = remaining.splice(bestIndex, 1);
-          ordered.push(next);
-        }
-        const merged = [...ordered, ...withoutCoords].map((activity, index) => ({
-          ...activity,
-          order_index: index,
-        }));
-        return { ...day, activities: merged };
+        const optimized = orderActivitiesByDistance(day.activities);
+        if (!optimized.changed) return day;
+        optimizedDays += 1;
+        return { ...day, activities: optimized.activities };
       });
+      if (optimizedDays === 0) {
+        showToast("Not enough location data to optimize routes.");
+        return;
+      }
       const updatedTrip = applyBudgetToTrip({
         ...trip,
         days: updatedDays,
@@ -2113,7 +2237,11 @@ export default function PlannerPage() {
       setTrip(updatedTrip);
       updateHistoryEntry(updatedTrip);
       await persistTripResult(updatedTrip);
-      showToast("Routes optimized for shorter travel.");
+      showToast(
+        optimizedDays > 1
+          ? `Routes optimized across ${optimizedDays} days.`
+          : "Routes optimized for shorter travel."
+      );
     } catch {
       showToast("Route optimization failed.");
     } finally {
@@ -2132,74 +2260,31 @@ export default function PlannerPage() {
 
     setOptimizingDay(true);
     try {
-      const sorted = [...day.activities].sort(
-        (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
-      );
-      const withCoords = sorted.filter((activity) => getActivityCoord(activity));
-      const withoutCoords = sorted.filter((activity) => !getActivityCoord(activity));
-
-      let merged = sorted;
-      let didOptimize = false;
-
-      if (withCoords.length >= 2) {
-        const remaining = [...withCoords];
-        const ordered: Activity[] = [];
-        ordered.push(remaining.shift()!);
-        while (remaining.length > 0) {
-          const last = ordered[ordered.length - 1];
-          const lastCoord = getActivityCoord(last);
-          if (!lastCoord) {
-            ordered.push(...remaining);
-            break;
-          }
-          let bestIndex = 0;
-          let bestDist = Infinity;
-          remaining.forEach((candidate, index) => {
-            const coord = getActivityCoord(candidate);
-            if (!coord) return;
-            const dist = haversineKm(lastCoord, coord);
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestIndex = index;
-            }
-          });
-          const [next] = remaining.splice(bestIndex, 1);
-          ordered.push(next);
-        }
-        merged = [...ordered, ...withoutCoords];
-        didOptimize = true;
-      }
-
       const weatherText =
         weather?.[dayNumber - 1]?.weather?.[0]?.description?.toLowerCase() ?? "";
-      const isRainy = /rain|storm|drizzle|shower|thunder/.test(weatherText);
-      if (isRainy) {
-        const outdoorTypes = new Set(["sightseeing", "experience"]);
-        const indoor = merged.filter(
-          (activity) => !outdoorTypes.has(activity.type ?? "")
-        );
-        const outdoor = merged.filter((activity) =>
-          outdoorTypes.has(activity.type ?? "")
-        );
-        merged = [...indoor, ...outdoor];
-        didOptimize = true;
-      }
+      const distanceOptimized = orderActivitiesByDistance(day.activities);
+      const baseActivities = distanceOptimized.changed
+        ? distanceOptimized.activities
+        : [...day.activities].sort(
+            (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+          );
+      const weatherOptimized = applyWeatherAwareOrder(baseActivities, weatherText);
+      const merged = weatherOptimized.changed
+        ? weatherOptimized.activities
+        : baseActivities;
+      const didOptimize = distanceOptimized.changed || weatherOptimized.changed;
+      const isRiskWeather = WEATHER_RISK_PATTERN.test(weatherText);
 
       if (!didOptimize) {
         showToast("Not enough data to optimize this day.");
         return;
       }
 
-      const normalized = merged.map((activity, index) => ({
-        ...activity,
-        order_index: index,
-      }));
-
       const updatedTrip = applyBudgetToTrip({
         ...trip,
         days: trip.days.map((entry) =>
           entry.day_number === dayNumber
-            ? { ...entry, activities: normalized }
+            ? { ...entry, activities: normalizeActivityOrder(merged) }
             : entry
         ),
       });
@@ -2207,11 +2292,216 @@ export default function PlannerPage() {
       setTrip(updatedTrip);
       updateHistoryEntry(updatedTrip);
       await persistTripResult(updatedTrip);
-      showToast(isRainy ? "Day optimized for weather + distance." : "Day optimized.");
+      showToast(
+        isRiskWeather ? "Day optimized for weather + distance." : "Day optimized."
+      );
     } catch {
       showToast("Day optimization failed.");
     } finally {
       setOptimizingDay(false);
+    }
+  };
+
+  const runBudgetTrim = useCallback(
+    async (sourceTrip: Trip, maxSwaps = 2) => {
+      const targetBudget = Number.isFinite(sourceTrip.meta?.total_estimated_budget)
+        ? Number(sourceTrip.meta.total_estimated_budget)
+        : parseBudget(budget);
+      if (!Number.isFinite(targetBudget) || targetBudget <= 0) {
+        return { trip: sourceTrip, swaps: 0 };
+      }
+
+      let workingTrip = sourceTrip;
+      let spend = getTripSpend(workingTrip);
+      let swaps = 0;
+
+      while (swaps < maxSwaps && spend > targetBudget * 1.02) {
+        const candidates = workingTrip.days
+          .flatMap((day) =>
+            day.activities.map((activity) => ({
+              dayNumber: day.day_number,
+              activity,
+              cost: Number(activity.estimated_cost) || 0,
+            }))
+          )
+          .sort((a, b) => b.cost - a.cost);
+
+        const candidate = candidates[0];
+        if (!candidate?.activity?.id || candidate.cost <= 0) break;
+
+        const maxCostHint = Math.max(
+          200,
+          Math.round(
+            Math.min(
+              candidate.cost * 0.72,
+              (targetBudget / Math.max(workingTrip.days.length, 1)) * 0.9
+            )
+          )
+        );
+
+        try {
+          const nextTrip = await requestActivityReplacement({
+            sourceTrip: workingTrip,
+            dayNumber: candidate.dayNumber,
+            activityId: candidate.activity.id,
+            maxCost: maxCostHint,
+          });
+          if (!nextTrip) break;
+          workingTrip = nextTrip;
+          spend = getTripSpend(workingTrip);
+          swaps += 1;
+        } catch {
+          break;
+        }
+      }
+
+      return { trip: workingTrip, swaps };
+    },
+    [budget, getTripSpend, requestActivityReplacement]
+  );
+
+  const runBudgetCopilot = async () => {
+    if (!trip || budgetCopilotRunning) return;
+    if (!planCapabilities.premiumInsights) {
+      showToast("Budget Copilot is available on Premium and Pro.");
+      return;
+    }
+
+    const targetBudget = Number.isFinite(displayBudget)
+      ? Number(displayBudget)
+      : parseBudget(budget);
+    if (!Number.isFinite(targetBudget) || targetBudget <= 0) {
+      showToast("Set a target budget to use Budget Copilot.");
+      return;
+    }
+
+    const currentSpend = getTripSpend(trip);
+    if (currentSpend <= targetBudget * 1.02) {
+      setLastBudgetCopilotSummary("Spend is already aligned with your budget.");
+      showToast("Budget already on track.");
+      return;
+    }
+
+    if (!planCapabilities.activitySwap) {
+      showToast("Auto-trim is available on Pro.");
+      return;
+    }
+
+    setBudgetCopilotRunning(true);
+    setLastBudgetCopilotSummary(null);
+    try {
+      const { trip: trimmedTrip, swaps } = await runBudgetTrim(trip, 3);
+      if (!swaps) {
+        showToast("Budget Copilot could not find cheaper swaps right now.");
+        return;
+      }
+
+      const savings = Math.max(0, currentSpend - getTripSpend(trimmedTrip));
+      const summary = `Auto-trimmed ${swaps} pricey stop${
+        swaps > 1 ? "s" : ""
+      } and saved about ₹${formatCurrency(Math.round(savings))}.`;
+
+      setTrip(trimmedTrip);
+      updateHistoryEntry(trimmedTrip);
+      await persistTripResult(trimmedTrip);
+      setLastBudgetCopilotSummary(summary);
+      showToast("Budget Copilot complete.");
+    } catch {
+      showToast("Budget Copilot failed.");
+    } finally {
+      setBudgetCopilotRunning(false);
+    }
+  };
+
+  const runDynamicReplan = async () => {
+    if (!trip || dynamicReplanning) return;
+    if (!isPro) {
+      showToast("Dynamic Replan is a Pro concierge feature.");
+      return;
+    }
+
+    setDynamicReplanning(true);
+    setLastReplanSummary(null);
+    try {
+      let workingTrip = trip;
+      const actions: string[] = [];
+
+      if (planCapabilities.routeOptimization) {
+        let routeChanges = 0;
+        const nextDays = workingTrip.days.map((day) => {
+          const optimized = orderActivitiesByDistance(day.activities);
+          if (!optimized.changed) return day;
+          routeChanges += 1;
+          return { ...day, activities: optimized.activities };
+        });
+        if (routeChanges > 0) {
+          workingTrip = applyBudgetToTrip({ ...workingTrip, days: nextDays });
+          actions.push(
+            `Routes optimized on ${routeChanges} day${routeChanges > 1 ? "s" : ""}.`
+          );
+        }
+      }
+
+      let weatherChanges = 0;
+      const weatherDays = workingTrip.days.map((day) => {
+        const weatherText =
+          weather?.[day.day_number - 1]?.weather?.[0]?.description?.toLowerCase() ??
+          "";
+        return { day, weatherText };
+      });
+      const weatherAdjustedDays = weatherDays.map(({ day, weatherText }) => {
+        const weatherOptimized = applyWeatherAwareOrder(day.activities, weatherText);
+        if (!weatherOptimized.changed) return day;
+        weatherChanges += 1;
+        return { ...day, activities: weatherOptimized.activities };
+      });
+      if (weatherChanges > 0) {
+        workingTrip = applyBudgetToTrip({
+          ...workingTrip,
+          days: weatherAdjustedDays,
+        });
+        actions.push(
+          `Rain-aware ordering applied to ${weatherChanges} day${
+            weatherChanges > 1 ? "s" : ""
+          }.`
+        );
+      }
+
+      const targetBudget = Number.isFinite(displayBudget)
+        ? Number(displayBudget)
+        : parseBudget(budget);
+      if (
+        Number.isFinite(targetBudget) &&
+        targetBudget > 0 &&
+        getTripSpend(workingTrip) > targetBudget * 1.02
+      ) {
+        const { trip: trimmedTrip, swaps } = await runBudgetTrim(workingTrip, 2);
+        if (swaps > 0) {
+          workingTrip = trimmedTrip;
+          actions.push(
+            `Budget Copilot swapped ${swaps} expensive stop${
+              swaps > 1 ? "s" : ""
+            }.`
+          );
+        }
+      }
+
+      if (!actions.length) {
+        setLastReplanSummary("No major adjustments needed for current weather and spend.");
+        showToast("Plan already looks optimized.");
+        return;
+      }
+
+      const summary = actions.join(" ");
+      setTrip(workingTrip);
+      updateHistoryEntry(workingTrip);
+      await persistTripResult(workingTrip);
+      setLastReplanSummary(summary);
+      showToast("Dynamic Replan complete.");
+    } catch {
+      showToast("Dynamic Replan failed.");
+    } finally {
+      setDynamicReplanning(false);
     }
   };
 
@@ -2272,6 +2562,34 @@ export default function PlannerPage() {
     }
 
     return updated;
+  };
+
+  const buildConciergeBrief = (dayNumber: number) => {
+    const day = trip?.days?.find((entry) => entry.day_number === dayNumber);
+    if (!day) return null;
+    const ordered = [...day.activities].sort(
+      (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0)
+    );
+    const highlights = ordered
+      .slice(0, 3)
+      .map((activity) => activity.title)
+      .filter(Boolean)
+      .join(", ");
+    const spend = ordered.reduce(
+      (sum, activity) => sum + (Number(activity.estimated_cost) || 0),
+      0
+    );
+    const weatherText =
+      weather?.[dayNumber - 1]?.weather?.[0]?.description?.toLowerCase() ?? "";
+    const weatherHint = weatherText
+      ? WEATHER_RISK_PATTERN.test(weatherText)
+        ? "Expect wet weather, so keep indoor stops first."
+        : `Weather looks ${weatherText}.`
+      : "Weather data is not available yet.";
+
+    return `Day ${dayNumber} has ${ordered.length} stops. Highlights: ${
+      highlights || "curated local experiences"
+    }. Estimated spend is rupees ${Math.round(spend)}. ${weatherHint}`;
   };
 
   const handleVoiceCommand = (text: string) => {
@@ -2356,6 +2674,73 @@ export default function PlannerPage() {
 
     if (/make\s+.*private|set\s+.*private|go\s+private/.test(lower)) {
       toggleTripVisibility(false);
+      return true;
+    }
+
+    if (/(dynamic|smart)\s*(replan|replanning)|replan\s+trip|weather\s+replan/.test(lower)) {
+      if (!isPro) {
+        showToast("Voice Concierge actions require Pro.");
+        return true;
+      }
+      void runDynamicReplan();
+      showToast("Running Dynamic Replan.");
+      return true;
+    }
+
+    if (/budget\s+copilot|auto\s*trim|trim\s+budget|reduce\s+spend/.test(lower)) {
+      if (!isPro) {
+        showToast("Voice Concierge actions require Pro.");
+        return true;
+      }
+      void runBudgetCopilot();
+      showToast("Running Budget Copilot.");
+      return true;
+    }
+
+    if (/optimi[sz]e\s+routes?|shortest\s+route|route\s+optimization/.test(lower)) {
+      if (!isPro) {
+        showToast("Voice Concierge actions require Pro.");
+        return true;
+      }
+      void optimizeTripRoutes();
+      showToast("Optimizing routes.");
+      return true;
+    }
+
+    const optimizeDayVoiceMatch = lower.match(
+      /optimi[sz]e\s+day\s+(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/i
+    );
+    if (optimizeDayVoiceMatch) {
+      if (!isPro) {
+        showToast("Voice Concierge actions require Pro.");
+        return true;
+      }
+      const dayNumber = parseNumberToken(optimizeDayVoiceMatch[1]);
+      if (!dayNumber) {
+        showToast("Please specify a valid day number.");
+        return true;
+      }
+      void optimizeDayPlan(dayNumber);
+      showToast(`Optimizing day ${dayNumber}.`);
+      return true;
+    }
+
+    if (/concierge\s+brief|trip\s+brief|day\s+brief|read\s+day|day\s+summary/.test(lower)) {
+      if (!isPro) {
+        showToast("Voice Concierge actions require Pro.");
+        return true;
+      }
+      const requestedDay = parseDayNumber(lower) ?? selectedDay;
+      const brief = buildConciergeBrief(requestedDay);
+      if (!brief) {
+        showToast("No day summary available yet.");
+        return true;
+      }
+      setChatMessages((prev) => [...prev, `Rahi.AI: ${brief}`]);
+      if (voiceSettings.tts) {
+        speakWithHeart(brief, voiceSettings.lang);
+      }
+      showToast(`Shared concierge brief for day ${requestedDay}.`);
       return true;
     }
 
@@ -2779,6 +3164,109 @@ export default function PlannerPage() {
       busiestDay,
     };
   }, [trip, displayBudget, totalFromActivities]);
+
+  const budgetCopilot = useMemo(() => {
+    if (!trip?.days?.length) return null;
+
+    const parsedBudget = parseBudget(budget);
+    const hasTargetBudget = Number.isFinite(displayBudget) && Number(displayBudget) > 0;
+    const targetBudget = hasTargetBudget
+      ? Number(displayBudget)
+      : Number.isFinite(parsedBudget) && parsedBudget > 0
+        ? parsedBudget
+        : Math.max(totalFromActivities, 0);
+    const currentSpend = totalFromActivities;
+    const budgetDelta = hasTargetBudget ? currentSpend - targetBudget : 0;
+    const utilizationPercent =
+      hasTargetBudget && targetBudget > 0
+        ? Math.round((currentSpend / targetBudget) * 100)
+        : 0;
+    const dayTarget = trip.days.length
+      ? Math.round(targetBudget / trip.days.length)
+      : 0;
+
+    const dayCosts = trip.days
+      .map((day) => ({
+        day: day.day_number,
+        cost: day.activities.reduce(
+          (sum, activity) => sum + (Number(activity.estimated_cost) || 0),
+          0
+        ),
+      }))
+      .sort((a, b) => b.cost - a.cost);
+
+    const expensiveStops = trip.days
+      .flatMap((day) =>
+        day.activities.map((activity) => ({
+          day: day.day_number,
+          id: activity.id,
+          title: activity.title,
+          cost: Number(activity.estimated_cost) || 0,
+        }))
+      )
+      .sort((a, b) => b.cost - a.cost);
+
+    const focusDays =
+      hasTargetBudget && dayTarget > 0
+        ? dayCosts.filter((day) => day.cost > dayTarget * 1.2).slice(0, 3)
+        : [];
+
+    const recommendations: string[] = [];
+    if (!hasTargetBudget) {
+      recommendations.push("Set a target budget to unlock auto-trim recommendations.");
+    }
+    if (hasTargetBudget && budgetDelta > 0) {
+      recommendations.push(
+        `You are over budget by ₹${formatCurrency(Math.round(budgetDelta))}.`
+      );
+      if (focusDays[0]) {
+        recommendations.push(
+          `Day ${focusDays[0].day} is the main overspend driver right now.`
+        );
+      }
+      if (expensiveStops[0]) {
+        recommendations.push(
+          `Swap "${expensiveStops[0].title}" for a lower-cost alternative.`
+        );
+      }
+    } else if (hasTargetBudget) {
+      recommendations.push("Spend is within budget. Keep this pace for the remaining days.");
+      if (dayTarget > 0) {
+        recommendations.push(
+          `Try to stay near ₹${formatCurrency(dayTarget)} per day for consistency.`
+        );
+      }
+    }
+
+    return {
+      targetBudget,
+      hasTargetBudget,
+      currentSpend,
+      budgetDelta,
+      utilizationPercent,
+      dayTarget,
+      dayCosts,
+      focusDays,
+      expensiveStops,
+      recommendations,
+      canAutoTrim:
+        planCapabilities.activitySwap &&
+        hasTargetBudget &&
+        budgetDelta > 0 &&
+        expensiveStops.length > 0,
+    };
+  }, [trip, budget, displayBudget, totalFromActivities, planCapabilities.activitySwap]);
+
+  const weatherRiskDays = useMemo(() => {
+    if (!trip?.days?.length || !weather?.length) return [];
+    return trip.days
+      .map((day) => {
+        const weatherText =
+          weather?.[day.day_number - 1]?.weather?.[0]?.description?.toLowerCase() ?? "";
+        return WEATHER_RISK_PATTERN.test(weatherText) ? day.day_number : null;
+      })
+      .filter((day): day is number => day !== null);
+  }, [trip?.days, weather]);
 
   const stayFit = useMemo(() => {
     if (!trip) return null;
@@ -3643,6 +4131,23 @@ export default function PlannerPage() {
                             <div className="mt-3 flex flex-wrap items-center gap-2">
                               <button
                                 type="button"
+                                onClick={() => void runDynamicReplan()}
+                                disabled={
+                                  !isPro ||
+                                  dynamicReplanning ||
+                                  loading ||
+                                  streaming
+                                }
+                                className="rahi-btn-secondary text-xs disabled:opacity-60"
+                              >
+                                {dynamicReplanning
+                                  ? "Replanning..."
+                                  : isPro
+                                    ? "Dynamic Replan"
+                                    : "Dynamic Replan (Pro)"}
+                              </button>
+                              <button
+                                type="button"
                                 onClick={optimizeTripRoutes}
                                 disabled={
                                   !planCapabilities.routeOptimization ||
@@ -3666,6 +4171,11 @@ export default function PlannerPage() {
                                 Swap pricey stop {planCapabilities.activitySwap ? "" : "(Pro)"}
                               </button>
                             </div>
+                            {lastReplanSummary && (
+                              <p className="mt-2 text-[11px] text-teal-200">
+                                {lastReplanSummary}
+                              </p>
+                            )}
                             <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-400">
                               {premiumInsights?.overloadedDays?.map((day) => (
                                 <span key={`over-${day.day}`} className="px-2 py-1 rounded-full bg-red-500/10 text-red-200">
@@ -3690,6 +4200,154 @@ export default function PlannerPage() {
                             Upgrade to Premium for route, budget, and pacing intelligence.
                           </div>
                         )}
+                        </div>
+                      </details>
+
+                      <details open className={foldableShell}>
+                        <summary className={foldableSummary}>
+                          <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-300">
+                            <IndianRupee className="w-4 h-4" /> Budget Copilot
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-gray-400">
+                            Live guardrails
+                            <ChevronDown className="h-4 w-4 text-gray-400 transition group-open:rotate-180" />
+                          </div>
+                        </summary>
+                        <div className={foldableContent}>
+                          {budgetCopilot ? (
+                            <>
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div className="bg-black/20 p-3 rounded-lg">
+                                  <p className="text-xs text-gray-400">Target</p>
+                                  <p className="text-lg font-bold text-white">
+                                    ₹{formatCurrency(budgetCopilot.targetBudget || 0)}
+                                  </p>
+                                </div>
+                                <div className="bg-black/20 p-3 rounded-lg">
+                                  <p className="text-xs text-gray-400">Current Spend</p>
+                                  <p className="text-lg font-bold text-white">
+                                    ₹{formatCurrency(budgetCopilot.currentSpend || 0)}
+                                  </p>
+                                </div>
+                                <div className="bg-black/20 p-3 rounded-lg">
+                                  <p className="text-xs text-gray-400">Delta</p>
+                                  <p
+                                    className={`text-lg font-bold ${
+                                      budgetCopilot.budgetDelta > 0
+                                        ? "text-red-300"
+                                        : "text-emerald-300"
+                                    }`}
+                                  >
+                                    {budgetCopilot.budgetDelta > 0 ? "+" : ""}
+                                    ₹{formatCurrency(Math.abs(budgetCopilot.budgetDelta))}
+                                  </p>
+                                </div>
+                                <div className="bg-black/20 p-3 rounded-lg">
+                                  <p className="text-xs text-gray-400">Day Target</p>
+                                  <p className="text-lg font-bold text-white">
+                                    ₹{formatCurrency(budgetCopilot.dayTarget || 0)}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {budgetCopilot.hasTargetBudget && (
+                                <div className="mt-3">
+                                  <div className="flex items-center justify-between text-[11px] text-gray-400">
+                                    <span>Budget pressure</span>
+                                    <span>{Math.max(0, budgetCopilot.utilizationPercent)}%</span>
+                                  </div>
+                                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/10">
+                                    <div
+                                      className={`h-full transition-all ${
+                                        budgetCopilot.utilizationPercent > 110
+                                          ? "bg-red-400"
+                                          : budgetCopilot.utilizationPercent > 95
+                                            ? "bg-amber-300"
+                                            : "bg-emerald-400"
+                                      }`}
+                                      style={{
+                                        width: `${Math.min(
+                                          100,
+                                          Math.max(
+                                            4,
+                                            Math.round(
+                                              (budgetCopilot.currentSpend /
+                                                Math.max(budgetCopilot.targetBudget, 1)) *
+                                                100
+                                            )
+                                          )
+                                        )}%`,
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void runBudgetCopilot()}
+                                  disabled={
+                                    budgetCopilotRunning ||
+                                    !budgetCopilot.canAutoTrim
+                                  }
+                                  className="rahi-btn-secondary text-xs disabled:opacity-60"
+                                >
+                                  {budgetCopilotRunning
+                                    ? "Auto-trimming..."
+                                    : budgetCopilot.canAutoTrim
+                                      ? "Run Auto-Trim"
+                                      : "Run Auto-Trim (Pro)"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={swapExpensiveActivity}
+                                  disabled={
+                                    !planCapabilities.activitySwap ||
+                                    !premiumInsights?.expensiveActivity ||
+                                    Boolean(replacingActivityId)
+                                  }
+                                  className="rahi-btn-ghost text-xs disabled:opacity-60"
+                                >
+                                  Swap top pricey stop {planCapabilities.activitySwap ? "" : "(Pro)"}
+                                </button>
+                              </div>
+
+                              {budgetCopilot.focusDays.length > 0 && (
+                                <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                                  {budgetCopilot.focusDays.map((day) => (
+                                    <span
+                                      key={`budget-focus-${day.day}`}
+                                      className="rounded-full border border-red-400/30 bg-red-500/10 px-2 py-1 text-red-200"
+                                    >
+                                      Day {day.day}: ₹{formatCurrency(day.cost)}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              <div className="mt-3 space-y-2">
+                                {budgetCopilot.recommendations.map((tip) => (
+                                  <p
+                                    key={tip}
+                                    className="rounded-lg border border-white/5 bg-black/10 px-3 py-2 text-xs text-gray-300"
+                                  >
+                                    {tip}
+                                  </p>
+                                ))}
+                              </div>
+
+                              {lastBudgetCopilotSummary && (
+                                <p className="mt-2 text-[11px] text-emerald-200">
+                                  {lastBudgetCopilotSummary}
+                                </p>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-xs text-gray-400">
+                              Generate a plan to activate Budget Copilot.
+                            </div>
+                          )}
                         </div>
                       </details>
 
@@ -4051,6 +4709,12 @@ export default function PlannerPage() {
                               Uses travel time + weather
                             </span>
                           </div>
+                          {weatherRiskDays.length > 0 && (
+                            <p className="text-[11px] text-amber-200 mt-2">
+                              Weather risk detected on day{" "}
+                              {weatherRiskDays.join(", ")}. Use Dynamic Replan for auto-adjustments.
+                            </p>
+                          )}
                           <p className="text-[11px] text-gray-500 mt-2">
                             {selectedDayWeather?.weather?.[0]?.description
                               ? `Weather: ${selectedDayWeather.weather[0].description}`
