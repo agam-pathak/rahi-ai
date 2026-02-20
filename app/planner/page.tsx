@@ -1835,6 +1835,11 @@ export default function PlannerPage() {
       }
 
       setTrip(finalTrip);
+      if (plannerStage === "build") {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set("stage", "optimize");
+        router.replace(`/planner?${params.toString()}`);
+      }
 
       const savedEntry: SavedTrip = {
         destination: destinationValue,
@@ -3381,6 +3386,85 @@ export default function PlannerPage() {
     return weather[index] ?? null;
   }, [weather, selectedDay]);
 
+  const stagePrimaryAction = useMemo(() => {
+    if (plannerMode === "chat") return null;
+    if (plannerStage === "build") {
+      return {
+        label: loading ? "Planning..." : plannerMode === "budget" ? "Optimize Budget" : "Generate Plan",
+        onClick: () => void generatePlan(),
+        disabled: loading || streaming,
+      };
+    }
+    if (plannerStage === "optimize") {
+      return {
+        label: dynamicReplanning
+          ? "Replanning..."
+          : isPro
+            ? "Run Dynamic Replan"
+            : "Run Dynamic Replan (Pro)",
+        onClick: () => void runDynamicReplan(),
+        disabled: !isPro || dynamicReplanning || loading || streaming,
+      };
+    }
+    return {
+      label: trip?.share_code
+        ? trip?.is_public === false
+          ? "Share Private Link"
+          : "Share Trip"
+        : pdfIsPremium
+          ? "Download Premium PDF"
+          : "Download PDF",
+      onClick: () => {
+        if (trip?.share_code) {
+          shareTripLink();
+          return;
+        }
+        downloadPDF();
+      },
+      disabled: loading || streaming,
+    };
+  }, [
+    plannerMode,
+    plannerStage,
+    loading,
+    streaming,
+    dynamicReplanning,
+    isPro,
+    trip?.share_code,
+    trip?.is_public,
+    pdfIsPremium,
+  ]);
+
+  const controlCenter = useMemo(() => {
+    if (!trip || plannerStage !== "optimize") return null;
+    const healthScore = tripHealth?.summary.score ?? 0;
+    const budgetDelta = Math.round(budgetCopilot?.budgetDelta ?? 0);
+    const weatherRiskCount = weatherRiskDays.length;
+    const routeReady = Boolean(premiumInsights?.canOptimize);
+
+    let statusLabel = "Balanced";
+    if (budgetDelta > 0 || weatherRiskCount > 0 || healthScore < 75) {
+      statusLabel = "Needs attention";
+    } else if (healthScore >= 90 && budgetDelta <= 0 && weatherRiskCount === 0) {
+      statusLabel = "Ready to share";
+    }
+
+    return {
+      statusLabel,
+      healthScore,
+      budgetDelta,
+      weatherRiskCount,
+      routeReady,
+    };
+  }, [
+    trip,
+    plannerStage,
+    tripHealth?.summary.score,
+    budgetCopilot?.budgetDelta,
+    weatherRiskDays,
+    premiumInsights?.canOptimize,
+  ]);
+
   return (
     <main className="rahi-planner-page relative min-h-screen overflow-hidden bg-black text-white selection:bg-teal-500 selection:text-black">
       <a href="#planner-main-content" className="rahi-skip-link">
@@ -3524,6 +3608,7 @@ export default function PlannerPage() {
                     aria-current={active ? "step" : undefined}
                     aria-label={`Switch planner stage to ${STAGE_CONFIG[stageKey].label}`}
                     onClick={() => setPlannerStage(stageKey)}
+                    disabled={blocked}
                     className={`rahi-mode-chip ${active ? "is-active" : ""} ${
                       blocked ? "opacity-60" : ""
                     }`}
@@ -3542,6 +3627,37 @@ export default function PlannerPage() {
               <span className="text-teal-200">{STAGE_CONFIG[plannerStage].label}</span>{" "}
               - {STAGE_CONFIG[plannerStage].hint}
             </p>
+          )}
+          {plannerMode !== "chat" && stagePrimaryAction && (
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={stagePrimaryAction.onClick}
+                disabled={stagePrimaryAction.disabled}
+                className="rahi-btn-primary px-4 py-2 text-sm disabled:opacity-60"
+              >
+                {stagePrimaryAction.label}
+              </button>
+              {plannerStage === "optimize" && (
+                <button
+                  type="button"
+                  className="rahi-btn-secondary px-4 py-2 text-sm"
+                  onClick={() => setPlannerStage("share")}
+                  disabled={!trip}
+                >
+                  Continue to Share
+                </button>
+              )}
+              {plannerStage === "share" && (
+                <button
+                  type="button"
+                  className="rahi-btn-secondary px-4 py-2 text-sm"
+                  onClick={() => setPlannerStage("optimize")}
+                >
+                  Back to Optimize
+                </button>
+              )}
+            </div>
           )}
           <div className="rahi-hero-metrics mt-4">
             <div className="rahi-hero-metric">
@@ -4013,20 +4129,6 @@ export default function PlannerPage() {
                           Save now
                         </button>
                       )}
-                      {plannerStage === "optimize" && (
-                        <button
-                          type="button"
-                          onClick={() => void runDynamicReplan()}
-                          disabled={!isPro || dynamicReplanning || loading || streaming}
-                          className="rahi-btn-primary px-4 py-2 text-sm disabled:opacity-60"
-                        >
-                          {dynamicReplanning
-                            ? "Replanning..."
-                            : isPro
-                              ? "Run Dynamic Replan"
-                              : "Run Dynamic Replan (Pro)"}
-                        </button>
-                      )}
                       {plannerStage === "share" && (
                         <>
                           {isPremium ? (
@@ -4138,18 +4240,90 @@ export default function PlannerPage() {
                           >
                             Edit Inputs
                           </button>
-                          {plannerStage === "optimize" && (
-                            <button
-                              type="button"
-                              className="rahi-btn-secondary text-[11px]"
-                              onClick={() => setPlannerStage("share")}
-                              disabled={!trip}
-                            >
-                              Continue to Share
-                            </button>
-                          )}
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {controlCenter && (
+                    <div className="mb-5 rounded-xl border border-teal-500/30 bg-gradient-to-br from-teal-500/10 via-black/20 to-black/30 px-4 py-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-teal-200">
+                            Trip Control Center
+                          </p>
+                          <p className="text-sm font-semibold text-white">
+                            {controlCenter.statusLabel}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className="rahi-btn-primary text-xs px-3 py-2 disabled:opacity-60"
+                            onClick={() => void runDynamicReplan()}
+                            disabled={!isPro || dynamicReplanning || loading || streaming}
+                          >
+                            {dynamicReplanning
+                              ? "Replanning..."
+                              : isPro
+                                ? "Run Dynamic Replan"
+                                : "Dynamic Replan (Pro)"}
+                          </button>
+                          <button
+                            type="button"
+                            className="rahi-btn-secondary text-xs px-3 py-2 disabled:opacity-60"
+                            onClick={() => void runBudgetCopilot()}
+                            disabled={
+                              budgetCopilotRunning ||
+                              !budgetCopilot?.canAutoTrim
+                            }
+                          >
+                            {budgetCopilotRunning ? "Auto-trimming..." : "Run Budget Copilot"}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Health Score
+                          </p>
+                          <p className="text-lg font-bold text-white">{controlCenter.healthScore}</p>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Budget Delta
+                          </p>
+                          <p
+                            className={`text-lg font-bold ${
+                              controlCenter.budgetDelta > 0 ? "text-red-300" : "text-emerald-300"
+                            }`}
+                          >
+                            {controlCenter.budgetDelta > 0 ? "+" : ""}
+                            ₹{formatCurrency(Math.abs(controlCenter.budgetDelta))}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Weather Risk
+                          </p>
+                          <p className="text-lg font-bold text-white">
+                            {controlCenter.weatherRiskCount
+                              ? `${controlCenter.weatherRiskCount} day${controlCenter.weatherRiskCount > 1 ? "s" : ""}`
+                              : "Low"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-gray-400">
+                            Route Data
+                          </p>
+                          <p className="text-lg font-bold text-white">
+                            {controlCenter.routeReady ? "Ready" : "Limited"}
+                          </p>
+                        </div>
+                      </div>
+                      {lastReplanSummary && (
+                        <p className="mt-3 text-[11px] text-teal-200">{lastReplanSummary}</p>
+                      )}
                     </div>
                   )}
 
@@ -4162,7 +4336,7 @@ export default function PlannerPage() {
 
                       {/* Weather Section */}
                       {plannerStage === "optimize" && tripHealth && (
-                        <details open className={foldableShell}>
+                        <details className={foldableShell}>
                           <summary className={foldableSummary}>
                             <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-300">
                               <ShieldCheck className="h-4 w-4" /> Trip Health
@@ -4227,7 +4401,7 @@ export default function PlannerPage() {
                       )}
 
                       {plannerStage === "optimize" && (
-                      <details open className={foldableShell}>
+                      <details className={foldableShell}>
                         <summary className={foldableSummary}>
                           <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-amber-300">
                             <Sparkles className="w-4 h-4" /> Premium Intelligence
@@ -4272,23 +4446,6 @@ export default function PlannerPage() {
                               </div>
                             </div>
                             <div className="mt-3 flex flex-wrap items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => void runDynamicReplan()}
-                                disabled={
-                                  !isPro ||
-                                  dynamicReplanning ||
-                                  loading ||
-                                  streaming
-                                }
-                                className="rahi-btn-secondary text-xs disabled:opacity-60"
-                              >
-                                {dynamicReplanning
-                                  ? "Replanning..."
-                                  : isPro
-                                    ? "Dynamic Replan"
-                                    : "Dynamic Replan (Pro)"}
-                              </button>
                               <button
                                 type="button"
                                 onClick={optimizeTripRoutes}
@@ -4348,7 +4505,7 @@ export default function PlannerPage() {
                       )}
 
                       {plannerStage === "optimize" && (
-                      <details open className={foldableShell}>
+                      <details className={foldableShell}>
                         <summary className={foldableSummary}>
                           <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-300">
                             <IndianRupee className="w-4 h-4" /> Budget Copilot
