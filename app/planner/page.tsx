@@ -64,6 +64,8 @@ const PREMIUM_CHECKLIST = [
 const ACTIVITY_TYPE_COUNT = 5;
 const WEATHER_RISK_PATTERN = /rain|storm|drizzle|shower|thunder|snow|hail/i;
 const OUTDOOR_ACTIVITY_TYPES = new Set(["sightseeing", "experience"]);
+const PLANNER_STAGE_ORDER = ["build", "optimize", "share"] as const;
+type PlannerStage = (typeof PLANNER_STAGE_ORDER)[number];
 type IndiaTemplatePreset = {
   id: string;
   title: string;
@@ -645,6 +647,25 @@ export default function PlannerPage() {
     chat: { title: "AI Travel Buddy", subtitle: "Chat with your personal travel assistant." },
   };
   const MODE_ORDER: Array<keyof typeof MODE_CONFIG> = ["ai", "budget", "chat"];
+  const STAGE_CONFIG: Record<
+    PlannerStage,
+    { label: string; hint: string; requiresTrip?: boolean }
+  > = {
+    build: {
+      label: "Build",
+      hint: "Set inputs and generate your base plan.",
+    },
+    optimize: {
+      label: "Optimize",
+      hint: "Improve route flow, budget, and day sequencing.",
+      requiresTrip: true,
+    },
+    share: {
+      label: "Share",
+      hint: "Export, share, and coordinate the final itinerary.",
+      requiresTrip: true,
+    },
+  };
 
   const TYPE_HINTS: Record<string, string> = {
     solo: "Best for solo exploration & flexibility.",
@@ -655,6 +676,29 @@ export default function PlannerPage() {
   };
 
   const plannerMode = (mode || "ai") as keyof typeof MODE_CONFIG;
+  const stage = searchParams.get("stage");
+  const requestedStage =
+    stage && (PLANNER_STAGE_ORDER as readonly string[]).includes(stage)
+      ? (stage as PlannerStage)
+      : null;
+  const plannerStage: PlannerStage =
+    requestedStage && (!STAGE_CONFIG[requestedStage].requiresTrip || Boolean(trip))
+      ? requestedStage
+      : trip
+        ? "optimize"
+        : "build";
+  const setPlannerStage = (nextStage: PlannerStage) => {
+    if (STAGE_CONFIG[nextStage].requiresTrip && !trip) {
+      showToast("Generate a trip first to unlock this stage.");
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("stage", nextStage);
+    if (plannerMode === "chat") {
+      params.set("mode", "ai");
+    }
+    router.push(`/planner?${params.toString()}`);
+  };
   const tripType = (type || "general") as keyof typeof TYPE_HINTS;
   const activeIndiaTemplate = useMemo(
     () =>
@@ -3365,7 +3409,7 @@ export default function PlannerPage() {
             Rahi.AI
           </div>
           <div className="rahi-topbar-actions flex flex-wrap items-center gap-2">
-            {trip && (
+            {trip && plannerStage === "build" && (
               <button
                 type="button"
                 className="rahi-btn-secondary text-xs px-3 py-2"
@@ -3460,6 +3504,45 @@ export default function PlannerPage() {
               );
             })}
           </div>
+          {plannerMode !== "chat" && (
+            <div className="rahi-mode-switch mt-3">
+              {PLANNER_STAGE_ORDER.map((stageKey) => {
+                const active = plannerStage === stageKey;
+                const blocked = Boolean(STAGE_CONFIG[stageKey].requiresTrip && !trip);
+                const icon =
+                  stageKey === "build" ? (
+                    <Compass className="h-3.5 w-3.5" />
+                  ) : stageKey === "optimize" ? (
+                    <Settings className="h-3.5 w-3.5" />
+                  ) : (
+                    <Share2 className="h-3.5 w-3.5" />
+                  );
+                return (
+                  <button
+                    key={stageKey}
+                    type="button"
+                    aria-current={active ? "step" : undefined}
+                    aria-label={`Switch planner stage to ${STAGE_CONFIG[stageKey].label}`}
+                    onClick={() => setPlannerStage(stageKey)}
+                    className={`rahi-mode-chip ${active ? "is-active" : ""} ${
+                      blocked ? "opacity-60" : ""
+                    }`}
+                    title={STAGE_CONFIG[stageKey].hint}
+                  >
+                    {icon}
+                    {STAGE_CONFIG[stageKey].label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {plannerMode !== "chat" && (
+            <p className="mt-2 text-xs text-gray-400">
+              Stage:{" "}
+              <span className="text-teal-200">{STAGE_CONFIG[plannerStage].label}</span>{" "}
+              - {STAGE_CONFIG[plannerStage].hint}
+            </p>
+          )}
           <div className="rahi-hero-metrics mt-4">
             <div className="rahi-hero-metric">
               <span className="rahi-hero-metric-label">Days</span>
@@ -3517,7 +3600,7 @@ export default function PlannerPage() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, ease: premiumEase }}
               className={`${
-                focusView ? "hidden" : "lg:col-span-5"
+                focusView || plannerStage !== "build" ? "hidden" : "lg:col-span-5"
               } ${glassPanel} rahi-planner-form-panel h-fit p-5 md:p-7 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7.5rem)] lg:overflow-y-auto custom-scrollbar`}
             >
               <div className="flex items-center gap-3 mb-6">
@@ -3808,7 +3891,13 @@ export default function PlannerPage() {
                initial={{ opacity: 0, x: 20 }}
                animate={{ opacity: 1, x: 0 }}
                transition={{ duration: 0.6, ease: premiumEase }}
-               className={`${focusView ? "lg:col-span-1" : "lg:col-span-7"} ${glassPanel} rahi-planner-result-panel relative flex min-h-[520px] flex-col p-5 md:min-h-[600px] md:p-7`}
+               className={`${
+                 plannerStage !== "build"
+                   ? "lg:col-span-12"
+                   : focusView
+                     ? "lg:col-span-1"
+                     : "lg:col-span-7"
+               } ${glassPanel} rahi-planner-result-panel relative flex min-h-[520px] flex-col p-5 md:min-h-[600px] md:p-7`}
             >
               {loading && !streaming && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-20 rounded-2xl">
@@ -3924,92 +4013,145 @@ export default function PlannerPage() {
                           Save now
                         </button>
                       )}
-                      {isPremium ? (
-                        hasStripeCustomer ? (
-                          <button
-                            onClick={manageBilling}
-                            disabled={billingLoading}
-                            className="rahi-btn-secondary text-sm disabled:opacity-60"
-                          >
-                            {billingLoading ? "Opening..." : "Manage Plan"}
-                          </button>
-                        ) : (
-                          <span className="rounded-full border border-emerald-400/45 bg-emerald-500/12 px-3 py-1.5 text-xs font-semibold text-emerald-200">
-                            {isPro ? "Pro" : "Premium"} Active (UPI)
-                          </span>
-                        )
-                      ) : upiEnabled ? (
+                      {plannerStage === "optimize" && (
                         <button
-                          onClick={() => {
-                            setUpiOpen(true);
-                            setUpiError(null);
-                            if (!upiPaymentId) {
-                              void startUpgrade("premium");
-                            }
-                          }}
-                          disabled={billingLoading}
+                          type="button"
+                          onClick={() => void runDynamicReplan()}
+                          disabled={!isPro || dynamicReplanning || loading || streaming}
                           className="rahi-btn-primary px-4 py-2 text-sm disabled:opacity-60"
                         >
-                          {billingLoading ? "Opening..." : "Upgrade Premium"}
-                        </button>
-                      ) : premiumEnabled ? (
-                        <button
-                          onClick={() => void startUpgrade("premium")}
-                          disabled={billingLoading}
-                          className="rahi-btn-primary px-4 py-2 text-sm disabled:opacity-60"
-                        >
-                          {billingLoading ? "Opening..." : "Upgrade Premium"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setWaitlistOpen(true)}
-                          className="rahi-btn-primary px-4 py-2 text-sm"
-                        >
-                          Premium Soon
+                          {dynamicReplanning
+                            ? "Replanning..."
+                            : isPro
+                              ? "Run Dynamic Replan"
+                              : "Run Dynamic Replan (Pro)"}
                         </button>
                       )}
-                      {premiumEnabled && !isPro && (
-                        <button
-                          onClick={() => void startUpgrade("pro")}
-                          disabled={billingLoading}
-                          className="rahi-btn-secondary px-4 py-2 text-sm disabled:opacity-60"
-                        >
-                          {billingLoading ? "Opening..." : "Go Pro"}
-                        </button>
-                      )}
-                      <button
-                        onClick={downloadPDF}
-                        className="rahi-btn-secondary"
-                      >
-                      <Download className="w-4 h-4" /> {pdfIsPremium ? "Premium PDF" : "PDF"}
-                      </button>
-                      {trip.share_code && (
-                      <button
-                      onClick={shareTripLink}
-                       className="rahi-btn-primary px-4 py-2 text-sm">
-                       <Share2 className="w-4 h-4" />
-                        {trip.is_public === false ? "Private Share" : "Share"}
-                      </button>
-                      )}
-                      {trip.id && (
-                        <button
-                          onClick={() => toggleTripVisibility()}
-                          disabled={toggleLoading}
-                          className="rahi-btn-secondary disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          {trip.is_public === false ? (
-                            <>
-                              <Lock className="w-4 h-4" /> Private
-                            </>
+                      {plannerStage === "share" && (
+                        <>
+                          {isPremium ? (
+                            hasStripeCustomer ? (
+                              <button
+                                onClick={manageBilling}
+                                disabled={billingLoading}
+                                className="rahi-btn-secondary text-sm disabled:opacity-60"
+                              >
+                                {billingLoading ? "Opening..." : "Manage Plan"}
+                              </button>
+                            ) : (
+                              <span className="rounded-full border border-emerald-400/45 bg-emerald-500/12 px-3 py-1.5 text-xs font-semibold text-emerald-200">
+                                {isPro ? "Pro" : "Premium"} Active (UPI)
+                              </span>
+                            )
+                          ) : upiEnabled ? (
+                            <button
+                              onClick={() => {
+                                setUpiOpen(true);
+                                setUpiError(null);
+                                if (!upiPaymentId) {
+                                  void startUpgrade("premium");
+                                }
+                              }}
+                              disabled={billingLoading}
+                              className="rahi-btn-primary px-4 py-2 text-sm disabled:opacity-60"
+                            >
+                              {billingLoading ? "Opening..." : "Upgrade Premium"}
+                            </button>
+                          ) : premiumEnabled ? (
+                            <button
+                              onClick={() => void startUpgrade("premium")}
+                              disabled={billingLoading}
+                              className="rahi-btn-primary px-4 py-2 text-sm disabled:opacity-60"
+                            >
+                              {billingLoading ? "Opening..." : "Upgrade Premium"}
+                            </button>
                           ) : (
-                            <>
-                              <Unlock className="w-4 h-4" /> Public
-                            </>
+                            <button
+                              onClick={() => setWaitlistOpen(true)}
+                              className="rahi-btn-primary px-4 py-2 text-sm"
+                            >
+                              Premium Soon
+                            </button>
                           )}
-                        </button>
+                          {premiumEnabled && !isPro && (
+                            <button
+                              onClick={() => void startUpgrade("pro")}
+                              disabled={billingLoading}
+                              className="rahi-btn-secondary px-4 py-2 text-sm disabled:opacity-60"
+                            >
+                              {billingLoading ? "Opening..." : "Go Pro"}
+                            </button>
+                          )}
+                          <button
+                            onClick={downloadPDF}
+                            className="rahi-btn-secondary"
+                          >
+                            <Download className="w-4 h-4" /> {pdfIsPremium ? "Premium PDF" : "PDF"}
+                          </button>
+                          {trip.share_code && (
+                            <button
+                              onClick={shareTripLink}
+                              className="rahi-btn-primary px-4 py-2 text-sm"
+                            >
+                              <Share2 className="w-4 h-4" />
+                              {trip.is_public === false ? "Private Share" : "Share"}
+                            </button>
+                          )}
+                          {trip.id && (
+                            <button
+                              onClick={() => toggleTripVisibility()}
+                              disabled={toggleLoading}
+                              className="rahi-btn-secondary disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                              {trip.is_public === false ? (
+                                <>
+                                  <Lock className="w-4 h-4" /> Private
+                                </>
+                              ) : (
+                                <>
+                                  <Unlock className="w-4 h-4" /> Public
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
+
+                  {plannerStage !== "build" && (
+                    <div className="mb-5 rounded-xl border border-white/10 bg-black/20 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-[0.18em] text-gray-400">
+                            Planner Stage
+                          </p>
+                          <p className="text-sm text-white">
+                            {STAGE_CONFIG[plannerStage].label}: {STAGE_CONFIG[plannerStage].hint}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className="rahi-btn-ghost text-[11px]"
+                            onClick={() => setPlannerStage("build")}
+                          >
+                            Edit Inputs
+                          </button>
+                          {plannerStage === "optimize" && (
+                            <button
+                              type="button"
+                              className="rahi-btn-secondary text-[11px]"
+                              onClick={() => setPlannerStage("share")}
+                              disabled={!trip}
+                            >
+                              Continue to Share
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* PDF Content Area */}
                   <div id="pdf-content" className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-6">
@@ -4019,7 +4161,7 @@ export default function PlannerPage() {
                       </div>
 
                       {/* Weather Section */}
-                      {tripHealth && (
+                      {plannerStage === "optimize" && tripHealth && (
                         <details open className={foldableShell}>
                           <summary className={foldableSummary}>
                             <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-300">
@@ -4084,6 +4226,7 @@ export default function PlannerPage() {
                         </details>
                       )}
 
+                      {plannerStage === "optimize" && (
                       <details open className={foldableShell}>
                         <summary className={foldableSummary}>
                           <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-amber-300">
@@ -4202,7 +4345,9 @@ export default function PlannerPage() {
                         )}
                         </div>
                       </details>
+                      )}
 
+                      {plannerStage === "optimize" && (
                       <details open className={foldableShell}>
                         <summary className={foldableSummary}>
                           <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-emerald-300">
@@ -4350,7 +4495,9 @@ export default function PlannerPage() {
                           )}
                         </div>
                       </details>
+                      )}
 
+                      {plannerStage === "share" && (
                       <details className={foldableShell}>
                         <summary className={foldableSummary}>
                           <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
@@ -4474,8 +4621,9 @@ export default function PlannerPage() {
                         )}
                         </div>
                       </details>
+                      )}
 
-                      {(weather.length > 0 || weatherLoading || weatherError) && (
+                      {plannerStage === "optimize" && (weather.length > 0 || weatherLoading || weatherError) && (
                         <details className={foldableShell}>
                           <summary className={foldableSummary}>
                             <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
@@ -4508,7 +4656,7 @@ export default function PlannerPage() {
                         </details>
                       )}
 
-                      {pdfIsPremium && (
+                      {plannerStage === "share" && pdfIsPremium && (
                         <details className={foldableShell}>
                           <summary className={foldableSummary}>
                             <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
@@ -4554,6 +4702,7 @@ export default function PlannerPage() {
                         </details>
                       )}
 
+                      {plannerStage === "optimize" && (
                       <details open className={foldableShell}>
                         <summary className={foldableSummary}>
                           <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
@@ -4589,8 +4738,9 @@ export default function PlannerPage() {
                           )}
                         </div>
                       </details>
+                      )}
 
-                      {stayFit && (
+                      {plannerStage === "optimize" && stayFit && (
                         <details className={foldableShell}>
                           <summary className={foldableSummary}>
                             <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-teal-400">
@@ -4661,7 +4811,7 @@ export default function PlannerPage() {
                         </details>
                       )}
 
-                      {trip?.days?.length > 0 && (
+                      {plannerStage === "optimize" && trip?.days?.length > 0 && (
                         <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
@@ -4723,7 +4873,7 @@ export default function PlannerPage() {
                         </div>
                       )}
 
-                      {trip && (
+                      {plannerStage === "share" && trip && (
                         <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2 text-teal-400 font-bold text-sm uppercase tracking-wide">
