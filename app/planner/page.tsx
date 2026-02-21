@@ -76,6 +76,19 @@ type IndiaTemplatePreset = {
   vibe: string;
 };
 
+type TripRow = {
+  id?: string;
+  destination?: string;
+  days?: string | number;
+  budget?: string | number;
+  interests?: string;
+  result?: Trip | string | null;
+  share_code?: string | null;
+  is_public?: boolean | null;
+  created_at?: string;
+  updated_at?: string;
+};
+
 const INDIA_TEMPLATE_PRESETS: IndiaTemplatePreset[] = [
   {
     id: "goa-weekend",
@@ -223,6 +236,7 @@ export default function PlannerPage() {
 
   // History & Context
   const [history, setHistory] = useState<SavedTrip[]>([]);
+  const [profileId, setProfileId] = useState<string | null>(null);
   const [weather, setWeather] = useState<WeatherItem[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState<string | null>(null);
@@ -296,6 +310,224 @@ export default function PlannerPage() {
       : destination.trim()
         ? `rahi-group-${destination.trim().toLowerCase()}`
         : null;
+  const historyStorageKey = profileId ? `trip_history:${profileId}` : "trip_history";
+  const hiddenHistoryStorageKey = profileId
+    ? `trip_history_hidden:${profileId}`
+    : "trip_history_hidden";
+
+  const normalizeSavedTripEntry = useCallback(
+    (entry: SavedTrip): SavedTrip | null => {
+      if (!entry?.tripData || typeof entry.tripData !== "object") return null;
+      const destinationValue =
+        entry.tripData.destination || entry.destination || "Untitled Trip";
+      const budgetInputValue =
+        typeof entry.budgetInput === "string"
+          ? entry.budgetInput
+          : String(entry.tripData.meta?.total_estimated_budget ?? 0);
+      const normalizedTrip = applyBudgetToTrip({
+        ...entry.tripData,
+        destination: destinationValue,
+        meta:
+          entry.tripData?.meta ?? {
+            total_estimated_budget: parseBudget(budgetInputValue) || 0,
+          },
+        is_public:
+          typeof entry.tripData?.is_public === "boolean"
+            ? entry.tripData.is_public
+            : true,
+      });
+
+      const normalizedTime = Number(entry.time);
+      return {
+        destination: destinationValue,
+        daysInput:
+          typeof entry.daysInput === "string"
+            ? entry.daysInput
+            : String(normalizedTrip.days?.length || ""),
+        budgetInput: budgetInputValue,
+        interestsInput:
+          typeof entry.interestsInput === "string"
+            ? entry.interestsInput
+            : normalizedTrip.meta?.primary_vibes?.join(", ") || "",
+        tripData: normalizedTrip,
+        time: Number.isFinite(normalizedTime) && normalizedTime > 0 ? normalizedTime : Date.now(),
+      };
+    },
+    []
+  );
+
+  const normalizeSavedTripList = useCallback(
+    (entries: SavedTrip[]) =>
+      entries
+        .map((entry) => normalizeSavedTripEntry(entry))
+        .filter((entry): entry is SavedTrip => Boolean(entry)),
+    [normalizeSavedTripEntry]
+  );
+
+  const getHistoryIdentity = useCallback((entry: SavedTrip) => {
+    if (entry.tripData?.id) return `id:${entry.tripData.id}`;
+    if (entry.tripData?.share_code) return `share:${entry.tripData.share_code}`;
+    return `local:${entry.destination}:${entry.daysInput}:${entry.budgetInput}:${entry.time}`;
+  }, []);
+
+  const readHiddenHistory = useCallback(() => {
+    if (typeof window === "undefined") return new Set<string>();
+    const raw = window.localStorage.getItem(hiddenHistoryStorageKey);
+    if (!raw) return new Set<string>();
+    try {
+      const parsed = JSON.parse(raw) as string[];
+      return new Set(
+        Array.isArray(parsed)
+          ? parsed.filter((value): value is string => typeof value === "string")
+          : []
+      );
+    } catch {
+      return new Set<string>();
+    }
+  }, [hiddenHistoryStorageKey]);
+
+  const writeHiddenHistory = useCallback(
+    (hidden: Set<string>) => {
+      if (typeof window === "undefined") return;
+      window.localStorage.setItem(
+        hiddenHistoryStorageKey,
+        JSON.stringify(Array.from(hidden))
+      );
+    },
+    [hiddenHistoryStorageKey]
+  );
+
+  const clearHiddenForTrip = useCallback(
+    (value: Trip) => {
+      if (!value?.id && !value?.share_code) return;
+      const hidden = readHiddenHistory();
+      let changed = false;
+      if (value.id && hidden.delete(`id:${value.id}`)) {
+        changed = true;
+      }
+      if (value.share_code && hidden.delete(`share:${value.share_code}`)) {
+        changed = true;
+      }
+      if (changed) {
+        writeHiddenHistory(hidden);
+      }
+    },
+    [readHiddenHistory, writeHiddenHistory]
+  );
+
+  const readLocalHistory = useCallback(() => {
+    if (typeof window === "undefined") return [];
+    const readEntries = (key: string) => {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return [];
+      try {
+        const parsed = JSON.parse(raw) as SavedTrip[];
+        return normalizeSavedTripList(Array.isArray(parsed) ? parsed : []);
+      } catch {
+        return [];
+      }
+    };
+
+    const scopedEntries = readEntries(historyStorageKey);
+    if (scopedEntries.length > 0) return scopedEntries;
+
+    if (!profileId) return scopedEntries;
+
+    const legacyEntries = readEntries("trip_history");
+    if (legacyEntries.length > 0) {
+      window.localStorage.setItem(historyStorageKey, JSON.stringify(legacyEntries));
+      return legacyEntries;
+    }
+
+    return [];
+  }, [historyStorageKey, normalizeSavedTripList, profileId]);
+
+  const writeLocalHistory = useCallback(
+    (entries: SavedTrip[]) => {
+      if (typeof window === "undefined") return;
+      window.localStorage.setItem(historyStorageKey, JSON.stringify(entries));
+    },
+    [historyStorageKey]
+  );
+
+  const mapServerTripToSavedTrip = useCallback(
+    (row: TripRow): SavedTrip | null => {
+      let result = row?.result;
+      if (typeof result === "string") {
+        try {
+          result = JSON.parse(result);
+        } catch {
+          return null;
+        }
+      }
+
+      if (!result || typeof result !== "object") return null;
+      const baseTrip = result as Trip;
+      const destinationValue =
+        baseTrip.destination || (typeof row.destination === "string" ? row.destination : "");
+      if (!destinationValue) return null;
+
+      const budgetInputValue = String(
+        row.budget ??
+          baseTrip.meta?.total_estimated_budget ??
+          0
+      );
+      const normalizedTrip = applyBudgetToTrip({
+        ...baseTrip,
+        id: typeof row.id === "string" ? row.id : baseTrip.id,
+        destination: destinationValue,
+        share_code:
+          typeof row.share_code === "string" ? row.share_code : baseTrip.share_code,
+        is_public:
+          typeof row.is_public === "boolean"
+            ? row.is_public
+            : typeof baseTrip.is_public === "boolean"
+              ? baseTrip.is_public
+              : true,
+        meta:
+          baseTrip.meta ?? {
+            total_estimated_budget: parseBudget(budgetInputValue) || 0,
+          },
+      });
+
+      const parsedTime = Date.parse(String(row.updated_at ?? row.created_at ?? ""));
+      const mapped: SavedTrip = {
+        destination: destinationValue,
+        daysInput:
+          normalizedTrip.days?.length > 0
+            ? String(normalizedTrip.days.length)
+            : String(row.days ?? ""),
+        budgetInput: budgetInputValue,
+        interestsInput:
+          typeof row.interests === "string"
+            ? row.interests
+            : normalizedTrip.meta?.primary_vibes?.join(", ") || "",
+        tripData: normalizedTrip,
+        time: Number.isFinite(parsedTime) ? parsedTime : Date.now(),
+      };
+      return normalizeSavedTripEntry(mapped);
+    },
+    [normalizeSavedTripEntry]
+  );
+
+  const mergeHistoryEntries = useCallback(
+    (serverEntries: SavedTrip[], localEntries: SavedTrip[]) => {
+      const merged: SavedTrip[] = [];
+      const seen = new Set<string>();
+      const pushUnique = (entry: SavedTrip) => {
+        const id = getHistoryIdentity(entry);
+        if (seen.has(id)) return;
+        seen.add(id);
+        merged.push(entry);
+      };
+
+      serverEntries.forEach(pushUnique);
+      localEntries.forEach(pushUnique);
+
+      return merged.sort((a, b) => b.time - a.time).slice(0, 10);
+    },
+    [getHistoryIdentity]
+  );
 
   const serializeTripForSync = useCallback((value: Trip | null) => {
     if (!value?.id) return "";
@@ -792,35 +1024,57 @@ export default function PlannerPage() {
 
   // Load history
   useEffect(() => {
-    const data = localStorage.getItem("trip_history");
-    if (data) {
+    if (checkingAuth) return;
+
+    let cancelled = false;
+
+    const hydrateHistory = async () => {
+      const localEntries = readLocalHistory();
+      let merged = localEntries;
+
       try {
-        const parsed = JSON.parse(data) as SavedTrip[];
-        const normalized = parsed.map((entry) => ({
-          ...entry,
-          tripData: {
-            ...entry.tripData,
-            meta: entry.tripData?.meta ?? {
-              total_estimated_budget: parseBudget(entry.budgetInput) || 0,
-            },
-            is_public:
-              typeof entry.tripData?.is_public === "boolean"
-                ? entry.tripData.is_public
-                : true,
-          },
-        }));
-        setHistory(normalized);
-      } catch {
-        setHistory([]);
-      }
-    }
-  }, []);
+        const res = await fetch("/api/trips");
+        if (res.ok) {
+          const payload = await res.json();
+          const serverEntries = Array.isArray(payload)
+            ? payload
+                .map((row) => mapServerTripToSavedTrip(row as TripRow))
+                .filter((entry): entry is SavedTrip => Boolean(entry))
+            : [];
+          merged = mergeHistoryEntries(serverEntries, localEntries);
+        }
+      } catch {}
+
+      if (cancelled) return;
+
+      const hidden = readHiddenHistory();
+      const visible = merged.filter((entry) => !hidden.has(getHistoryIdentity(entry)));
+      setHistory(visible);
+      writeLocalHistory(visible);
+    };
+
+    void hydrateHistory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    checkingAuth,
+    profileId,
+    readLocalHistory,
+    mapServerTripToSavedTrip,
+    mergeHistoryEntries,
+    readHiddenHistory,
+    getHistoryIdentity,
+    writeLocalHistory,
+  ]);
 
   useEffect(() => {
     if (checkingAuth) return;
     fetch("/api/ai/profile")
       .then((res) => res.json())
       .then((data) => {
+        setProfileId(typeof data?.id === "string" ? data.id : null);
         const normalizedTier = normalizePlanTier(data?.plan_tier);
         const derivedTier: PlanTier = normalizedTier
           ? normalizedTier
@@ -849,6 +1103,7 @@ export default function PlannerPage() {
         );
       })
       .catch(() => {
+        setProfileId(null);
         setPlanTier("free");
         setTrialStatus("none");
         setTrialDaysLeft(0);
@@ -1387,9 +1642,17 @@ export default function PlannerPage() {
   };
 
   const deleteTrip = (index: number) => {
-    const updated = history.filter((_, i) => i !== index);
-    setHistory(updated);
-    localStorage.setItem("trip_history", JSON.stringify(updated));
+    setHistory((prev) => {
+      const target = prev[index];
+      const updated = prev.filter((_, i) => i !== index);
+      writeLocalHistory(updated);
+      if (target?.tripData?.id || target?.tripData?.share_code) {
+        const hidden = readHiddenHistory();
+        hidden.add(getHistoryIdentity(target));
+        writeHiddenHistory(hidden);
+      }
+      return updated;
+    });
   };
 
   const loadHistoryTrip = (entry: SavedTrip) => {
@@ -1405,6 +1668,7 @@ export default function PlannerPage() {
   };
 
   const updateHistoryEntry = useCallback((updatedTrip: Trip) => {
+    clearHiddenForTrip(updatedTrip);
     setHistory((prev) => {
       const next = prev.map((entry) => {
         const sameById =
@@ -1423,10 +1687,10 @@ export default function PlannerPage() {
         }
         return entry;
       });
-      localStorage.setItem("trip_history", JSON.stringify(next));
+      writeLocalHistory(next);
       return next;
     });
-  }, []);
+  }, [clearHiddenForTrip, writeLocalHistory]);
 
   const persistTripResult = useCallback(
     async (updatedTrip: Trip, options?: { reason?: "manual" | "autosave" | "queued" }) => {
@@ -1492,9 +1756,7 @@ export default function PlannerPage() {
               if (!sameById && !sameByShare) return entry;
               return { ...entry, tripData: localFallbackTrip };
             });
-            if (typeof window !== "undefined") {
-              window.localStorage.setItem("trip_history", JSON.stringify(next));
-            }
+            writeLocalHistory(next);
             return next;
           });
           lastSavedSnapshotRef.current = "";
@@ -1598,7 +1860,14 @@ export default function PlannerPage() {
         }
       }
     },
-    [parseApiError, serializeTripForSync, showToast, stampTripSyncMeta, updateHistoryEntry]
+    [
+      parseApiError,
+      serializeTripForSync,
+      showToast,
+      stampTripSyncMeta,
+      updateHistoryEntry,
+      writeLocalHistory,
+    ]
   );
 
   useEffect(() => {
@@ -1851,9 +2120,10 @@ export default function PlannerPage() {
       };
 
       // Update Local History
+      clearHiddenForTrip(finalTrip);
       setHistory((prev) => {
         const updated = [savedEntry, ...prev].slice(0, 10);
-        localStorage.setItem("trip_history", JSON.stringify(updated));
+        writeLocalHistory(updated);
         return updated;
       });
 
@@ -3965,7 +4235,7 @@ export default function PlannerPage() {
                   <div className="space-y-3 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
                     {history.map((t, i) => (
                       <div
-                        key={t.time}
+                        key={t.tripData?.id || t.tripData?.share_code || `${t.destination}-${t.time}`}
                         className="group flex justify-between items-center p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 hover:border-teal-500/30 transition cursor-pointer"
                         role="button"
                         tabIndex={0}
