@@ -5,11 +5,43 @@ import { normalizePlanTier, type PlanTier } from "@/lib/billing/tier";
 
 const isPaidTier = (tier: PlanTier) => tier === "premium" || tier === "pro";
 
+const parseEnvSet = (raw?: string | null) =>
+  new Set(
+    String(raw ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean)
+  );
+
+const getSubscriptionItemProductId = (item: Stripe.SubscriptionItem) => {
+  const product = item.price?.product;
+  if (typeof product === "string") return product;
+  if (product && typeof product === "object" && "id" in product) {
+    return String((product as { id?: string }).id ?? "");
+  }
+  return "";
+};
+
 const getTierFromSubscription = (subscription: Stripe.Subscription): PlanTier => {
-  const proPriceId = process.env.STRIPE_PRICE_ID_PRO;
-  if (!proPriceId) return "premium";
+  const requestedTier = normalizePlanTier(subscription.metadata?.requested_plan);
+  if (requestedTier === "pro") return "pro";
+
+  const proPriceIds = parseEnvSet(process.env.STRIPE_PRICE_ID_PRO);
+  const proProductIds = parseEnvSet(process.env.STRIPE_PRODUCT_ID_PRO);
+
   const hasProItem = subscription.items.data.some(
-    (item) => item.price?.id === proPriceId
+    (item) => {
+      const priceId = item.price?.id ?? "";
+      const lookupKey = item.price?.lookup_key?.toLowerCase() ?? "";
+      const nickname = item.price?.nickname?.toLowerCase() ?? "";
+      const productId = getSubscriptionItemProductId(item);
+      return (
+        (priceId && proPriceIds.has(priceId)) ||
+        (productId && proProductIds.has(productId)) ||
+        lookupKey.includes("pro") ||
+        nickname.includes("pro")
+      );
+    }
   );
   return hasProItem ? "pro" : "premium";
 };
@@ -38,28 +70,57 @@ const upsertProfilePlan = async ({
   await supabaseAdmin!.from("profiles").upsert(basePayload);
 };
 
-const updateProfilePlanByCustomer = async ({
+const findProfileIdByCustomer = async (customerId: string) => {
+  const { data } = await supabaseAdmin!
+    .from("profiles")
+    .select("id")
+    .eq("stripe_customer_id", customerId)
+    .limit(1)
+    .maybeSingle();
+  return typeof data?.id === "string" ? data.id : null;
+};
+
+const findProfileIdByCustomerEmail = async ({
+  stripe,
+  customerId,
+}: {
+  stripe: Stripe;
+  customerId: string;
+}) => {
+  const customer = await stripe.customers.retrieve(customerId);
+  if (!customer || customer.deleted) return null;
+  const email = typeof customer.email === "string" ? customer.email.trim() : "";
+  if (!email) return null;
+
+  const { data } = await supabaseAdmin!
+    .from("profiles")
+    .select("id")
+    .ilike("email", email)
+    .limit(1)
+    .maybeSingle();
+  return typeof data?.id === "string" ? data.id : null;
+};
+
+const syncProfilePlanByCustomer = async ({
+  stripe,
   customerId,
   tier,
 }: {
+  stripe: Stripe;
   customerId: string;
   tier: PlanTier;
 }) => {
-  const basePayload = {
-    is_premium: isPaidTier(tier),
-  };
-  const { error } = await supabaseAdmin!
-    .from("profiles")
-    .update({
-      ...basePayload,
-      plan_tier: tier,
-    })
-    .eq("stripe_customer_id", customerId);
-  if (!error) return;
-  await supabaseAdmin!
-    .from("profiles")
-    .update(basePayload)
-    .eq("stripe_customer_id", customerId);
+  let userId = await findProfileIdByCustomer(customerId);
+  if (!userId) {
+    userId = await findProfileIdByCustomerEmail({ stripe, customerId });
+  }
+  if (!userId) return;
+
+  await upsertProfilePlan({
+    userId,
+    customerId,
+    tier,
+  });
 };
 
 export async function POST(req: Request) {
@@ -101,11 +162,15 @@ export async function POST(req: Request) {
       }
     }
 
-    if (event.type === "customer.subscription.updated") {
+    if (
+      event.type === "customer.subscription.created" ||
+      event.type === "customer.subscription.updated"
+    ) {
       const subscription = event.data.object as Stripe.Subscription;
       const customerId = typeof subscription.customer === "string" ? subscription.customer : null;
       if (customerId) {
-        await updateProfilePlanByCustomer({
+        await syncProfilePlanByCustomer({
+          stripe,
           customerId,
           tier: getTierFromSubscription(subscription),
         });
@@ -116,7 +181,8 @@ export async function POST(req: Request) {
       const subscription = event.data.object as Stripe.Subscription;
       const customerId = typeof subscription.customer === "string" ? subscription.customer : null;
       if (customerId) {
-        await updateProfilePlanByCustomer({
+        await syncProfilePlanByCustomer({
+          stripe,
           customerId,
           tier: "free",
         });

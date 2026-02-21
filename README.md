@@ -42,7 +42,10 @@ Recommended:
 - `SUPABASE_SERVICE_ROLE_KEY` (server-only admin fallback)
 - `PREMIUM_ENABLED` / `NEXT_PUBLIC_PREMIUM_ENABLED` (billing flags)
 - `BASIC_TRIAL_DAYS` (default: `14`)
-- `STRIPE_PRICE_ID_PREMIUM` and `STRIPE_PRICE_ID_PRO` (multi-tier checkout)
+- `STRIPE_PRICE_ID_PREMIUM`, `STRIPE_PRICE_ID_PRO`, `STRIPE_PRODUCT_ID_PRO` (multi-tier checkout)
+- `STRIPE_WEBHOOK_SECRET` from the same Stripe mode (test/live) and include webhook events:
+  `checkout.session.completed`, `customer.subscription.created`,
+  `customer.subscription.updated`, `customer.subscription.deleted`
 
 ## Supabase RLS
 

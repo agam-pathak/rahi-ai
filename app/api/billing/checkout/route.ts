@@ -84,6 +84,11 @@ export async function POST(req: Request) {
       metadata: {
         requested_plan: checkoutTier,
       },
+      subscription_data: {
+        metadata: {
+          requested_plan: checkoutTier,
+        },
+      },
       success_url: `${baseUrl}/planner?billing=success&tier=${checkoutTier}`,
       cancel_url: `${baseUrl}/planner?billing=cancel&tier=${checkoutTier}`,
     });
