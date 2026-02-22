@@ -1,15 +1,163 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { motion, Variants } from "framer-motion";
 import {
-  Compass, Wallet, Bot, ChevronDown, ArrowRight, Globe, Star, Settings, Sparkles
+  Compass,
+  Wallet,
+  Bot,
+  ChevronDown,
+  ArrowRight,
+  Globe,
+  Star,
+  Settings,
+  Sparkles,
+  Radar,
+  Route,
+  ShieldCheck,
+  Clock3,
+  CheckCircle2,
 } from "lucide-react";
 import RahiBackground from "@/components/RahiBackground";
 import ThemeToggle from "@/components/ThemeToggle";
 import RahiVoiceUI, { speakWithHeart } from "@/components/RahiVoiceUI";
+
+type CommandProfileId = "solo" | "college" | "family";
+
+type CommandLane = {
+  label: string;
+  detail: string;
+  value: number;
+  gradient: string;
+};
+
+type CommandProfile = {
+  id: CommandProfileId;
+  title: string;
+  tagline: string;
+  destination: string;
+  duration: string;
+  budget: string;
+  command: string;
+  launchHref: string;
+  checkpoints: string[];
+  lanes: CommandLane[];
+};
+
+const COMMAND_PROFILE_ORDER: CommandProfileId[] = ["solo", "college", "family"];
+
+const COMMAND_PROFILES: Record<CommandProfileId, CommandProfile> = {
+  solo: {
+    id: "solo",
+    title: "Solo Sprint",
+    tagline: "Fast, flexible, and photo-ready routes.",
+    destination: "Udaipur",
+    duration: "3D / 2N",
+    budget: "₹11,500",
+    command:
+      "Build a 3-day solo Udaipur itinerary under 12k with sunrise spots, safe evening areas, and low transit switching.",
+    launchHref: "/planner?mode=ai&type=solo",
+    checkpoints: [
+      "Late-evening safety buffers in every day plan",
+      "Walking-first path sequencing with fallback transport",
+      "Experience density balanced against recovery windows",
+    ],
+    lanes: [
+      {
+        label: "Route Confidence",
+        detail: "Sequence quality across city zones",
+        value: 94,
+        gradient: "linear-gradient(90deg, #2dd4bf 0%, #67e8f9 100%)",
+      },
+      {
+        label: "Budget Guardrail",
+        detail: "Cost drift vs target budget",
+        value: 89,
+        gradient: "linear-gradient(90deg, #22d3ee 0%, #7dd3fc 100%)",
+      },
+      {
+        label: "Safety Buffer",
+        detail: "Late-hour fallback density",
+        value: 91,
+        gradient: "linear-gradient(90deg, #6ee7b7 0%, #5eead4 100%)",
+      },
+    ],
+  },
+  college: {
+    id: "college",
+    title: "College Crew",
+    tagline: "High-energy itineraries without budget chaos.",
+    destination: "Goa",
+    duration: "4D / 3N",
+    budget: "₹17,800",
+    command:
+      "Plan a 4-day Goa college trip with beach mornings, budget nightlife clusters, and one premium highlight under 18k each.",
+    launchHref: "/planner?mode=budget&type=college",
+    checkpoints: [
+      "Shared transfer windows to cut duplicate ride spend",
+      "Nightlife and café clusters kept in one mobility band",
+      "One splurge experience protected without breaking total budget",
+    ],
+    lanes: [
+      {
+        label: "Group Sync",
+        detail: "Decision alignment across members",
+        value: 90,
+        gradient: "linear-gradient(90deg, #2dd4bf 0%, #93c5fd 100%)",
+      },
+      {
+        label: "Spend Control",
+        detail: "Variance from per-person target",
+        value: 92,
+        gradient: "linear-gradient(90deg, #6ee7b7 0%, #67e8f9 100%)",
+      },
+      {
+        label: "Energy Curve",
+        detail: "Pacing from day one to four",
+        value: 87,
+        gradient: "linear-gradient(90deg, #67e8f9 0%, #7dd3fc 100%)",
+      },
+    ],
+  },
+  family: {
+    id: "family",
+    title: "Family Comfort",
+    tagline: "Comfort-first planning with low-friction logistics.",
+    destination: "Kerala",
+    duration: "5D / 4N",
+    budget: "₹39,000",
+    command:
+      "Create a 5-day Kerala family itinerary with low transit fatigue, child-friendly stops, and weather-safe indoor alternatives.",
+    launchHref: "/planner?mode=ai&type=family",
+    checkpoints: [
+      "Midday cooldown windows built into every day",
+      "Backup indoor experiences for uncertain weather",
+      "Transfer-time caps to reduce travel fatigue",
+    ],
+    lanes: [
+      {
+        label: "Comfort Index",
+        detail: "Transit load and rest spacing",
+        value: 93,
+        gradient: "linear-gradient(90deg, #5eead4 0%, #86efac 100%)",
+      },
+      {
+        label: "Weather Resilience",
+        detail: "Indoor fallback plan coverage",
+        value: 88,
+        gradient: "linear-gradient(90deg, #67e8f9 0%, #93c5fd 100%)",
+      },
+      {
+        label: "Family Fit",
+        detail: "Activity suitability by pace",
+        value: 95,
+        gradient: "linear-gradient(90deg, #86efac 0%, #67e8f9 100%)",
+      },
+    ],
+  },
+};
 
 export default function Home() {
   const router = useRouter();
@@ -30,6 +178,9 @@ export default function Home() {
     autoSend: true,
     lang: "en-IN" as "en-IN" | "hi-IN",
   });
+  const [activeCommandProfile, setActiveCommandProfile] =
+    useState<CommandProfileId>("solo");
+  const [commandCopied, setCommandCopied] = useState(false);
 
   // --- AUTHENTICATION LOGIC (Untouched) ---
   useEffect(() => {
@@ -150,6 +301,8 @@ export default function Home() {
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }, [profileName, user]);
 
+  const activeCommandPlan = COMMAND_PROFILES[activeCommandProfile];
+
   const speakResponse = (text: string) => {
     if (!voiceSettings.tts) return;
     speakWithHeart(
@@ -169,6 +322,20 @@ export default function Home() {
       return;
     }
     speakResponse(text);
+  };
+
+  useEffect(() => {
+    setCommandCopied(false);
+  }, [activeCommandProfile]);
+
+  const copyMissionCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(activeCommandPlan.command);
+      setCommandCopied(true);
+      setVoiceNote("Mission prompt copied.");
+    } catch {
+      setVoiceNote("Could not copy prompt.");
+    }
   };
 
   const handleVoiceCommand = (text: string) => {
@@ -472,10 +639,20 @@ export default function Home() {
             </motion.div>
           </div>
 
-          <motion.div variants={itemVariants} className="w-full max-w-[530px] mx-auto lg:ml-auto">
+          <motion.div variants={itemVariants} className="w-full max-w-[560px] mx-auto lg:ml-auto space-y-4">
             <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-black/35 shadow-[0_18px_45px_rgba(2,6,23,0.45)]">
               <div className="absolute inset-0 bg-gradient-to-br from-teal-500/15 via-transparent to-cyan-400/10 pointer-events-none" />
-              <div className="absolute inset-0 bg-black/15 pointer-events-none" />
+              <div className="absolute inset-0 bg-black/20 pointer-events-none" />
+              <div className="absolute left-4 right-4 top-4 z-10 inline-flex items-center justify-between rounded-2xl border border-white/10 bg-black/45 px-3 py-2 backdrop-blur">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.2em] text-cyan-200/80">Live Mission</p>
+                  <p className="text-xs font-semibold text-white">{activeCommandPlan.title}</p>
+                </div>
+                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-200">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+                  stable
+                </span>
+              </div>
               <div className="aspect-[16/10]">
                 <img
                   src="/brand/Gemini_Generated_Image_pzz4qupzz4qupzz4.png"
@@ -484,6 +661,40 @@ export default function Home() {
                   loading="eager"
                 />
               </div>
+              <div className="absolute bottom-4 left-4 right-4 z-10 grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-white/10 bg-black/55 px-2.5 py-2 backdrop-blur">
+                  <p className="text-[9px] uppercase tracking-[0.16em] text-slate-300">Destination</p>
+                  <p className="mt-1 text-xs font-semibold text-white">{activeCommandPlan.destination}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/55 px-2.5 py-2 backdrop-blur">
+                  <p className="text-[9px] uppercase tracking-[0.16em] text-slate-300">Duration</p>
+                  <p className="mt-1 text-xs font-semibold text-white">{activeCommandPlan.duration}</p>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/55 px-2.5 py-2 backdrop-blur">
+                  <p className="text-[9px] uppercase tracking-[0.16em] text-slate-300">Budget</p>
+                  <p className="mt-1 text-xs font-semibold text-white">{activeCommandPlan.budget}</p>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { label: "Route Graph", value: "97 nodes", icon: Route },
+                { label: "Risk Scan", value: "Low", icon: ShieldCheck },
+                { label: "ETA Sync", value: "Live", icon: Radar },
+              ].map((metric) => (
+                <div
+                  key={metric.label}
+                  className="rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2.5 backdrop-blur"
+                >
+                  <div className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-400/10 text-cyan-200">
+                    <metric.icon className="h-3.5 w-3.5" />
+                  </div>
+                  <p className="mt-2 text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                    {metric.label}
+                  </p>
+                  <p className="text-sm font-semibold text-slate-100">{metric.value}</p>
+                </div>
+              ))}
             </div>
           </motion.div>
         </motion.div>
@@ -657,13 +868,175 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 4. FEATURES (Your Content) */}
+      {/* 4. MISSION CONTROL */}
+      <section id="mission-control" className="relative z-20 max-w-7xl mx-auto px-6 py-24">
+        <div className="rahi-panel p-6 md:p-8 lg:p-10">
+          <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
+            <div className="space-y-3">
+              <span className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-cyan-200">
+                <Radar className="h-4 w-4" />
+                Mission Control
+              </span>
+              <h2 className="text-3xl md:text-4xl font-display font-bold text-white">
+                Build routes like an operations desk.
+              </h2>
+              <p className="max-w-2xl text-sm md:text-base text-slate-300">
+                Switch traveler profiles and watch routing, budget, and risk lanes rebalance in real
+                time before you launch into planner mode.
+              </p>
+            </div>
+            <button
+              className="rahi-btn-secondary text-xs"
+              onClick={() => router.push(activeCommandPlan.launchHref)}
+            >
+              Launch {activeCommandPlan.title}
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-8 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="space-y-5">
+              <div className="flex flex-wrap gap-2">
+                {COMMAND_PROFILE_ORDER.map((profileId) => {
+                  const profile = COMMAND_PROFILES[profileId];
+                  const active = profileId === activeCommandProfile;
+                  return (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      onClick={() => setActiveCommandProfile(profile.id)}
+                      className={`rounded-2xl border px-4 py-3 text-left transition-all ${
+                        active
+                          ? "border-cyan-300/50 bg-cyan-500/15 text-white shadow-[0_14px_36px_-24px_rgba(34,211,238,0.85)]"
+                          : "border-white/15 bg-slate-950/45 text-slate-200 hover:border-cyan-300/30 hover:text-white"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold">{profile.title}</p>
+                      <p className="mt-1 text-xs text-slate-300">{profile.tagline}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="relative overflow-hidden rounded-3xl border border-white/15 bg-slate-950/55 p-5 md:p-6">
+                <div className="absolute -left-20 top-0 h-44 w-44 rounded-full bg-cyan-400/15 blur-3xl" />
+                <div className="absolute -right-24 bottom-0 h-44 w-44 rounded-full bg-teal-300/10 blur-3xl" />
+                <div className="relative">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-200/80">
+                    Command Prompt
+                  </p>
+                  <p className="mt-3 rounded-2xl border border-cyan-300/25 bg-black/40 px-4 py-4 font-mono text-sm leading-relaxed text-cyan-100">
+                    {activeCommandPlan.command}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="rahi-btn-primary text-sm"
+                      onClick={() => router.push(activeCommandPlan.launchHref)}
+                    >
+                      Run Mission
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className="rahi-btn-secondary text-sm"
+                      onClick={() => void copyMissionCommand()}
+                    >
+                      {commandCopied ? "Prompt Copied" : "Copy Prompt"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  { label: "Destination", value: activeCommandPlan.destination, icon: Route },
+                  { label: "Duration", value: activeCommandPlan.duration, icon: Clock3 },
+                  { label: "Budget", value: activeCommandPlan.budget, icon: Wallet },
+                ].map((detail) => (
+                  <div
+                    key={detail.label}
+                    className="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3"
+                  >
+                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-400/10 text-cyan-200">
+                      <detail.icon className="h-4 w-4" />
+                    </div>
+                    <p className="mt-3 text-[10px] uppercase tracking-[0.16em] text-slate-400">
+                      {detail.label}
+                    </p>
+                    <p className="text-sm font-semibold text-white">{detail.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-3xl border border-white/15 bg-slate-950/55 p-5 md:p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-200">
+                  Execution Lanes
+                </p>
+                <div className="mt-4 space-y-4">
+                  {activeCommandPlan.lanes.map((lane) => (
+                    <div key={`${activeCommandProfile}-${lane.label}`} className="space-y-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-white">{lane.label}</p>
+                          <p className="text-xs text-slate-400">{lane.detail}</p>
+                        </div>
+                        <p className="text-sm font-semibold text-cyan-200">{lane.value}%</p>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-900/90 ring-1 ring-white/10">
+                        <motion.div
+                          key={`${activeCommandProfile}-${lane.label}-bar`}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${lane.value}%` }}
+                          transition={{ duration: 0.7, ease: premiumEase }}
+                          className="h-full rounded-full"
+                          style={{ background: lane.gradient }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-3xl border border-white/15 bg-slate-950/50 p-5 md:p-6">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-teal-200">
+                  Mission Checklist
+                </p>
+                <ul className="mt-3 space-y-2">
+                  {activeCommandPlan.checkpoints.map((checkpoint) => (
+                    <li key={checkpoint} className="flex gap-2 text-sm text-slate-200">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
+                      <span>{checkpoint}</span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-5 rounded-2xl border border-cyan-300/25 bg-cyan-500/10 p-3">
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-200/85">
+                    Confidence Note
+                  </p>
+                  <p className="mt-1 text-sm text-cyan-100">
+                    Rahi continuously balances speed, comfort, and cost so every generated itinerary
+                    is launch-ready in one pass.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 5. FEATURES (Your Content) */}
       <section id="features" className="relative z-20 max-w-7xl mx-auto px-6 py-24">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <FeatureCard 
             icon={<Compass className="h-8 w-8 text-teal-400" />}
             title="AI Trip Planner"
             desc="Personalized travel plans within your budget."
+            eyebrow="Neural Route Engine"
+            signal="Drafts first plan in under a minute"
+            actionLabel="Open Planner"
             onClick={() => router.push('/planner?mode=ai')}
             color="hover:border-teal-500/50"
           />
@@ -671,6 +1044,9 @@ export default function Home() {
             icon={<Wallet className="h-8 w-8 text-teal-400" />}
             title="Budget Guardian"
             desc="Track and control your travel expenses."
+            eyebrow="Spend Intelligence"
+            signal="Flags budget drift before it compounds"
+            actionLabel="Open Budget"
             onClick={() => router.push('/planner?mode=budget')}
             color="hover:border-teal-500/50"
           />
@@ -678,13 +1054,16 @@ export default function Home() {
             icon={<Bot className="h-8 w-8 text-teal-400" />}
             title="AI Travel Buddy"
             desc="Chat with your AI companion anytime."
+            eyebrow="Context Memory"
+            signal="Remembers your vibe, pace, and constraints"
+            actionLabel="Open Chat"
             onClick={() => router.push('/planner?mode=chat')}
             color="hover:border-teal-500/50"
           />
         </div>
       </section>
 
-      {/* 5. HOW IT WORKS */}
+      {/* 6. HOW IT WORKS */}
       <section className="relative z-20 max-w-5xl mx-auto px-6 py-24 border-t border-white/5">
         <SectionHeader title="How Rahi.AI Works" />
         
@@ -702,7 +1081,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 6. BENEFITS */}
+      {/* 7. BENEFITS */}
       <section className="relative z-20 max-w-7xl mx-auto px-6 py-24 border-t border-white/5">
          <div className="grid md:grid-cols-3 gap-8"> 
            {[
@@ -721,7 +1100,7 @@ export default function Home() {
          </div>
       </section>
 
-      {/* 7. WHAT YOU CAN PLAN */}
+      {/* 8. WHAT YOU CAN PLAN */}
       <section className="relative z-20 max-w-7xl mx-auto px-6 py-24 border-t border-white/5">
         <SectionHeader title="What You Can Plan with Rahi.AI" />
 
@@ -746,7 +1125,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 8. TESTIMONIALS */}
+      {/* 9. TESTIMONIALS */}
       <section className="relative z-20 max-w-7xl mx-auto px-6 py-24 border-t border-white/5">
         <SectionHeader title="Loved by Travelers" />
         
@@ -774,7 +1153,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 9. BOTTOM CTA (Requested) */}
+      {/* 10. BOTTOM CTA (Requested) */}
       <section className="relative z-20 py-24 px-6 text-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -798,7 +1177,7 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* 10. FOOTER */}
+      {/* 11. FOOTER */}
       <footer id="community" className="relative z-20 border-t border-white/10 bg-black/40 backdrop-blur-xl py-16 text-center">
         <div className="max-w-4xl mx-auto px-6 space-y-6">
           <Globe className="h-8 w-8 text-teal-500 mx-auto animate-pulse" />
@@ -826,18 +1205,54 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
-function FeatureCard({ icon, title, desc, color, onClick }: any) {
+type FeatureCardProps = {
+  icon: ReactNode;
+  title: string;
+  desc: string;
+  color?: string;
+  onClick: () => void;
+  eyebrow?: string;
+  signal?: string;
+  actionLabel?: string;
+};
+
+function FeatureCard({
+  icon,
+  title,
+  desc,
+  color,
+  onClick,
+  eyebrow,
+  signal,
+  actionLabel,
+}: FeatureCardProps) {
   return (
     <motion.div 
       onClick={onClick}
       whileHover={{ y: -10 }}
       className={`group relative p-8 rounded-3xl rahi-card backdrop-blur-sm transition-all duration-300 hover:bg-white/10 cursor-pointer ${color}`}
     >
+      {eyebrow && (
+        <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/80">
+          {eyebrow}
+        </p>
+      )}
       <div className="mb-6 p-4 rounded-2xl bg-black/40 w-fit border border-white/5">
         {icon}
       </div>
       <h3 className="text-2xl font-display font-bold mb-3 text-white">{title}</h3>
       <p className="text-gray-400 leading-relaxed">{desc}</p>
+      {signal && (
+        <p className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
+          {signal}
+        </p>
+      )}
+      {actionLabel && (
+        <div className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-teal-300 group-hover:text-cyan-200">
+          <span>{actionLabel}</span>
+          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+        </div>
+      )}
       {/* Glow Effect */}
       <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
     </motion.div>
