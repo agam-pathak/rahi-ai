@@ -4,7 +4,7 @@ type Scenario = {
   name: string;
   mode: "ai" | "budget" | "chat";
   viewport: { width: number; height: number };
-  heading: RegExp;
+  headingText: string;
 };
 
 const scenarios: Scenario[] = [
@@ -12,33 +12,39 @@ const scenarios: Scenario[] = [
     name: "planner-ai-desktop",
     mode: "ai",
     viewport: { width: 1440, height: 980 },
-    heading: /AI Trip Planner/i,
+    headingText: "AI Trip Planner",
   },
   {
     name: "planner-ai-mobile",
     mode: "ai",
     viewport: { width: 390, height: 844 },
-    heading: /AI Trip Planner/i,
+    headingText: "AI Trip Planner",
   },
   {
     name: "planner-budget-desktop",
     mode: "budget",
     viewport: { width: 1440, height: 980 },
-    heading: /Budget Guardian/i,
+    headingText: "Budget Guardian",
   },
   {
     name: "planner-chat-desktop",
     mode: "chat",
     viewport: { width: 1440, height: 980 },
-    heading: /AI Travel Buddy/i,
+    headingText: "AI Travel Buddy",
   },
   {
     name: "planner-chat-mobile",
     mode: "chat",
     viewport: { width: 390, height: 844 },
-    heading: /AI Travel Buddy/i,
+    headingText: "AI Travel Buddy",
   },
 ];
+
+const modeButtonLabel: Record<Scenario["mode"], string> = {
+  ai: "Planner",
+  budget: "Budget",
+  chat: "Chat",
+};
 
 for (const scenario of scenarios) {
   test(scenario.name, async ({ page }) => {
@@ -52,7 +58,16 @@ for (const scenario of scenarios) {
       waitUntil: "domcontentloaded",
     });
     await expect(page.locator("main.rahi-planner-page")).toBeVisible();
-    await expect(page.getByRole("heading", { name: scenario.heading })).toBeVisible();
+
+    await page
+      .getByRole("button", {
+        name: new RegExp(`Switch planner mode to ${modeButtonLabel[scenario.mode]}`, "i"),
+      })
+      .click();
+
+    await expect(
+      page.locator("main.rahi-planner-page .rahi-hero-title").first()
+    ).toContainText(scenario.headingText);
 
     await page.addStyleTag({
       content: `
