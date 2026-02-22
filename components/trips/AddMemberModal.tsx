@@ -60,8 +60,8 @@ export default function AddMemberModal({ tripId, onClose }: Props) {
 }
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="w-full max-w-sm rounded-xl bg-zinc-900 p-5">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 px-4 pb-4 pt-10 sm:items-center sm:pb-0">
+      <div className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-xl bg-zinc-900 p-4 sm:p-5">
         <h3 className="text-sm font-semibold mb-3">Add Trip Member</h3>
 
         <input
@@ -93,10 +93,10 @@ export default function AddMemberModal({ tripId, onClose }: Props) {
           <p className="mt-2 text-xs text-red-400">{error}</p>
         )}
 
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button
             onClick={onClose}
-            className="px-3 py-1 text-sm text-gray-400 hover:text-white"
+            className="w-full px-3 py-2 text-sm text-gray-400 hover:text-white sm:w-auto sm:py-1"
           >
             Cancel
           </button>
@@ -104,7 +104,7 @@ export default function AddMemberModal({ tripId, onClose }: Props) {
           <button
             onClick={handleAdd}
             disabled={loading}
-            className="px-4 py-1 rounded bg-teal-500 text-black text-sm font-semibold disabled:opacity-60"
+            className="w-full rounded bg-teal-500 px-4 py-2 text-sm font-semibold text-black disabled:opacity-60 sm:w-auto sm:py-1"
           >
             {loading ? "Adding..." : "Add"}
           </button>

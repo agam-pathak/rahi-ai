@@ -515,7 +515,7 @@ html[data-theme="dark"] .rahi-bg-vignette {
 
 @media (max-width: 640px) {
   .rahi-map-shell {
-    height: 240px;
+    height: 260px;
   }
 }
 
@@ -531,7 +531,12 @@ html[data-theme="dark"] .rahi-bg-vignette {
 
 @media (max-width: 768px) {
   .rahi-map-shell.is-fullscreen {
-    inset: 20px;
+    inset:
+      max(8px, env(safe-area-inset-top))
+      max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom))
+      max(8px, env(safe-area-inset-left));
+    border-radius: 18px;
   }
 }
 
@@ -556,6 +561,7 @@ html[data-theme="dark"] .rahi-bg-vignette {
 .rahi-map-summary {
   position: absolute;
   left: 12px;
+  right: 12px;
   bottom: 12px;
   padding: 6px 10px;
   border-radius: 999px;
@@ -565,6 +571,7 @@ html[data-theme="dark"] .rahi-bg-vignette {
   color: #e2e8f0;
   z-index: 3;
   pointer-events: none;
+  max-width: fit-content;
 }
 
 .rahi-map-insights {
@@ -606,6 +613,7 @@ html[data-theme="dark"] .rahi-bg-vignette {
   flex-wrap: wrap;
   gap: 6px;
   pointer-events: auto;
+  max-width: calc(100% - 96px);
 }
 
 .rahi-map-chip {
@@ -641,6 +649,77 @@ html[data-theme="dark"] .rahi-bg-vignette {
 .rahi-map-fullscreen:hover {
   border-color: rgba(34, 211, 238, 0.6);
   color: #ecfeff;
+}
+
+@media (max-width: 640px) {
+  .rahi-map-toolbar {
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .rahi-map-chips {
+    max-width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .rahi-map-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .rahi-map-chip {
+    flex: 0 0 auto;
+    padding: 5px 9px;
+    font-size: 10px;
+  }
+
+  .rahi-map-fullscreen {
+    align-self: flex-end;
+    padding: 5px 10px;
+    font-size: 10px;
+  }
+
+  .rahi-map-summary {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    max-width: none;
+    border-radius: 12px;
+    padding: 6px 8px;
+    text-align: center;
+  }
+
+  .rahi-map-summary.has-insights {
+    bottom: 82px;
+  }
+
+  .rahi-map-insights {
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rahi-map-insight {
+    min-width: 0;
+    padding: 6px 8px;
+  }
+
+  .rahi-map-status {
+    left: 8px;
+    right: 8px;
+    bottom: auto;
+    top: 56px;
+    border-radius: 10px;
+    text-align: center;
+  }
 }
 
 .rahi-map-overlay {

@@ -491,7 +491,7 @@ export default function TripMap({ stops, destination, mapboxToken = "", premium 
       </div>
 
       {(routeLoading || routeSummary) && (
-        <div className="rahi-map-summary">
+        <div className={`rahi-map-summary ${premium && insightStats ? "has-insights" : ""}`}>
           {routeLoading && <span>Calculating route...</span>}
           {!routeLoading && routeSummary && (
             <span>

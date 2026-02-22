@@ -192,7 +192,7 @@ export default function TripItinerary({
               <p className="text-[11px] uppercase tracking-[0.16em] text-teal-300/90">Trip Overview</p>
               <p className="text-xs text-gray-400">{totalActivities} activities across {dayCount} days</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
               <button
                 type="button"
                 onClick={() => setOverviewOpen((prev) => !prev)}
@@ -220,7 +220,7 @@ export default function TripItinerary({
             </div>
           </div>
           {overviewOpen && (
-            <div className="grid grid-cols-2 gap-3 p-4 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border border-cyan-400/20 bg-cyan-500/5 p-3">
                 <p className="text-[11px] text-cyan-200/90">Total Estimated</p>
                 <p className="text-xl font-semibold text-white">₹{formatCurrency(totalCost)}</p>
@@ -280,7 +280,7 @@ export default function TripItinerary({
           >
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-display text-2xl font-bold text-teal-300">Day {day.day_number}</h3>
                   <span className="rounded-full border border-white/15 bg-black/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-300">
                     {orderedActivities.length} stops
@@ -297,7 +297,7 @@ export default function TripItinerary({
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex w-full flex-wrap items-center justify-start gap-2 sm:w-auto sm:justify-end">
                 {onRegenerateDay && (
                   <button
                     type="button"
@@ -369,7 +369,7 @@ export default function TripItinerary({
                       {buildSchedule(orderedActivities).map(({ activity, index, start, end }) => (
                         <div
                           key={activity.id || `${day.day_number}-${index}`}
-                          className="relative flex gap-4"
+                          className="relative flex flex-col gap-2 sm:flex-row sm:gap-4"
                           draggable={Boolean(onReorderActivity)}
                           onDragStart={handleDragStart(day.day_number, index)}
                           onDragOver={handleDragOver}
@@ -378,21 +378,21 @@ export default function TripItinerary({
                             dragRef.current = null;
                           }}
                         >
-                          <div className="w-12 sm:w-16 text-right text-[10px] text-gray-400">
+                          <div className="w-full text-left text-[10px] text-gray-400 sm:w-16 sm:text-right">
                             <div>{formatTime(start)}</div>
                             <div className="text-gray-600">{formatTime(end)}</div>
                           </div>
 
                           <div className="relative flex-1">
                             <span className="absolute -left-6 top-4 h-2.5 w-2.5 rounded-full bg-teal-400 shadow-[0_0_0_5px_rgba(38,240,216,0.2)]" />
-                            <div className="flex items-start justify-between rounded-xl border border-white/8 bg-black/20 p-3.5 transition hover:bg-black/30">
+                            <div className="flex flex-col gap-3 rounded-xl border border-white/8 bg-black/20 p-3.5 transition hover:bg-black/30 sm:flex-row sm:items-start sm:justify-between">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
                                   {onReorderActivity && (
                                     <GripVertical className="h-4 w-4 cursor-grab text-gray-500" />
                                   )}
                                   <span className="text-[10px] font-mono text-gray-500">#{index + 1}</span>
-                                  <h4 className="truncate text-[17px] font-semibold text-white">{activity.title}</h4>
+                                  <h4 className="truncate text-base font-semibold text-white sm:text-[17px]">{activity.title}</h4>
                                 </div>
                                 <div className="mt-1 flex items-center gap-1.5 text-xs text-gray-400">
                                   <MapPin className="h-3 w-3 text-teal-500/75" />
@@ -420,7 +420,7 @@ export default function TripItinerary({
                                     ))}
                                 </div>
                               </div>
-                              <div className="ml-3 flex flex-col items-end gap-2">
+                              <div className="flex flex-row items-center gap-2 sm:ml-3 sm:flex-col sm:items-end">
                                 <span className="rounded border border-teal-500/20 bg-teal-500/10 px-2 py-1 font-mono text-xs text-teal-300">
                                   ₹{formatCurrency(Number(activity.estimated_cost) || 0)}
                                 </span>

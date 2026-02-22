@@ -182,7 +182,7 @@ export default function TripInvitesPanel({ tripId }: { tripId: string }) {
         </div>
         {linkInvite && (
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-300">
-            <span className="truncate max-w-[220px]">{linkInvite}</span>
+            <span className="w-full break-all sm:w-auto sm:max-w-[280px] sm:truncate">{linkInvite}</span>
             <button
               type="button"
               onClick={() => copyToClipboard(linkInvite)}
@@ -237,7 +237,7 @@ export default function TripInvitesPanel({ tripId }: { tripId: string }) {
           </p>
           {emailInvite && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-gray-300">
-              <span className="truncate max-w-[220px]">{emailInvite}</span>
+              <span className="w-full break-all sm:w-auto sm:max-w-[280px] sm:truncate">{emailInvite}</span>
               <button
                 type="button"
                 onClick={() => copyToClipboard(emailInvite)}

@@ -412,7 +412,7 @@ export default function Home() {
 
   if (checkingAuth) {
     return (
-      <div className="min-h-screen bg-rahi-bg flex items-center justify-center text-teal-300 px-6">
+      <div className="min-h-screen bg-rahi-bg flex items-center justify-center text-teal-300 px-4 sm:px-6">
         <div className="rahi-panel px-8 py-6 flex flex-col items-center gap-4">
           <div className="h-8 w-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
           <p className="animate-pulse">Loading Rahi.AI...</p>
@@ -661,7 +661,7 @@ export default function Home() {
                   loading="eager"
                 />
               </div>
-              <div className="absolute bottom-4 left-4 right-4 z-10 grid grid-cols-3 gap-2">
+              <div className="absolute bottom-4 left-4 right-4 z-10 grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="rounded-xl border border-white/10 bg-black/55 px-2.5 py-2 backdrop-blur">
                   <p className="text-[9px] uppercase tracking-[0.16em] text-slate-300">Destination</p>
                   <p className="mt-1 text-xs font-semibold text-white">{activeCommandPlan.destination}</p>
@@ -676,7 +676,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {[
                 { label: "Route Graph", value: "97 nodes", icon: Route },
                 { label: "Risk Scan", value: "Low", icon: ShieldCheck },
@@ -704,7 +704,7 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1, y: [0, 10, 0] }}
           transition={{ delay: 2, duration: 2, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute bottom-10 left-1/2 -translate-x-1/2"
+          className="absolute bottom-10 left-1/2 hidden -translate-x-1/2 sm:block"
         >
           <div className="flex flex-col items-center gap-2 text-gray-400 text-sm">
             <span>Scroll to explore</span>
@@ -714,17 +714,17 @@ export default function Home() {
       </section>
 
       {/* VOICE CONCIERGE */}
-      <section id="voice" className="relative z-20 max-w-7xl mx-auto px-6 py-20">
+      <section id="voice" className="relative z-20 mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
         <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
           <div className="space-y-6">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold tracking-wider uppercase">
               <Sparkles className="h-4 w-4" />
               Rahi Voice Concierge
             </div>
-            <h2 className="text-4xl md:text-5xl font-display font-bold text-white">
+            <h2 className="text-3xl font-display font-bold text-white sm:text-4xl md:text-5xl">
               Speak your trip into existence.
             </h2>
-            <p className="text-lg text-gray-300 max-w-xl">
+            <p className="max-w-xl text-base text-gray-300 sm:text-lg">
               Your home base voice assistant can launch planners, budgets, and travel chats instantly.
               It is fast, focused, and tuned for Rahi.AI tasks.
             </p>
@@ -869,7 +869,7 @@ export default function Home() {
       </section>
 
       {/* 4. MISSION CONTROL */}
-      <section id="mission-control" className="relative z-20 max-w-7xl mx-auto px-6 py-24">
+      <section id="mission-control" className="relative z-20 mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24">
         <div className="rahi-panel p-6 md:p-8 lg:p-10">
           <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
             <div className="space-y-3">
@@ -1028,7 +1028,7 @@ export default function Home() {
       </section>
 
       {/* 5. FEATURES (Your Content) */}
-      <section id="features" className="relative z-20 max-w-7xl mx-auto px-6 py-24">
+      <section id="features" className="relative z-20 mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <FeatureCard 
             icon={<Compass className="h-8 w-8 text-teal-400" />}
@@ -1064,15 +1064,15 @@ export default function Home() {
       </section>
 
       {/* 6. HOW IT WORKS */}
-      <section className="relative z-20 max-w-5xl mx-auto px-6 py-24 border-t border-white/5">
+      <section className="relative z-20 mx-auto max-w-5xl border-t border-white/5 px-4 py-16 sm:px-6 sm:py-24">
         <SectionHeader title="How Rahi.AI Works" />
         
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-12">
+        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
           {["Plan", "Generate", "Travel", "Save"].map((step, i) => (
             <motion.div 
               key={i}
               whileHover={{ y: -5 }}
-            className="rahi-card p-8 rounded-2xl text-center hover:bg-white/10 transition-all cursor-default"
+            className="rahi-card cursor-default rounded-2xl p-6 text-center transition-all hover:bg-white/10 sm:p-8"
           >
               <span className="block text-4xl font-bold text-teal-500/80 mb-2">{i + 1}</span>
               <span className="text-lg font-medium text-white">{step}</span>
@@ -1082,7 +1082,7 @@ export default function Home() {
       </section>
 
       {/* 7. BENEFITS */}
-      <section className="relative z-20 max-w-7xl mx-auto px-6 py-24 border-t border-white/5">
+      <section className="relative z-20 mx-auto max-w-7xl border-t border-white/5 px-4 py-16 sm:px-6 sm:py-24">
          <div className="grid md:grid-cols-3 gap-8"> 
            {[
             ["AI Optimized Budgets","Trips planned with smart cost control."],
@@ -1090,9 +1090,9 @@ export default function Home() {
             ["Student Friendly","Designed for real student travel needs."]
           ].map(([t,d],i)=>(
             <div key={i}
-              className="rahi-card p-10 rounded-2xl
+              className="rahi-card rounded-2xl p-6
               hover:border-teal-500/50 hover:shadow-[0_0_20px_rgba(20,184,166,0.1)]
-              transition-all duration-300 backdrop-blur-sm cursor-default">
+              transition-all duration-300 backdrop-blur-sm cursor-default sm:p-10">
               <h3 className="text-teal-400 font-semibold text-xl mb-2">{t}</h3>
               <p className="text-gray-400 leading-relaxed">{d}</p>
             </div>
@@ -1101,10 +1101,10 @@ export default function Home() {
       </section>
 
       {/* 8. WHAT YOU CAN PLAN */}
-      <section className="relative z-20 max-w-7xl mx-auto px-6 py-24 border-t border-white/5">
+      <section className="relative z-20 mx-auto max-w-7xl border-t border-white/5 px-4 py-16 sm:px-6 sm:py-24">
         <SectionHeader title="What You Can Plan with Rahi.AI" />
 
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-12">
+        <div className="mt-12 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {[
             { t: "Solo Trips", v: "solo" },
             { t: "College Trips", v: "college" },
@@ -1117,7 +1117,7 @@ export default function Home() {
               onClick={() => router.push(`/planner?type=${item.v}`)}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="flex flex-col items-center justify-center gap-3 p-8 rahi-card rounded-2xl hover:bg-teal-500/20 hover:border-teal-500/50 transition-all group"
+              className="group flex flex-col items-center justify-center gap-3 rounded-2xl p-6 transition-all hover:border-teal-500/50 hover:bg-teal-500/20 rahi-card sm:p-8"
             >
               <span className="text-lg font-semibold text-gray-200 group-hover:text-white">{item.t}</span>
             </motion.button>
@@ -1126,7 +1126,7 @@ export default function Home() {
       </section>
 
       {/* 9. TESTIMONIALS */}
-      <section className="relative z-20 max-w-7xl mx-auto px-6 py-24 border-t border-white/5">
+      <section className="relative z-20 mx-auto max-w-7xl border-t border-white/5 px-4 py-16 sm:px-6 sm:py-24">
         <SectionHeader title="Loved by Travelers" />
         
         <div className="grid md:grid-cols-3 gap-8 mt-12">
@@ -1154,23 +1154,23 @@ export default function Home() {
       </section>
 
       {/* 10. BOTTOM CTA (Requested) */}
-      <section className="relative z-20 py-24 px-6 text-center">
+      <section className="relative z-20 px-4 py-16 text-center sm:px-6 sm:py-24">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           whileInView={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
-          className="max-w-3xl mx-auto rahi-panel p-12 rounded-3xl"
+          className="mx-auto max-w-3xl rounded-3xl rahi-panel p-6 sm:p-10 md:p-12"
         >
             <h2 className="text-3xl md:text-4xl font-display font-bold text-white mb-6">
                 Ready to Start Your Journey?
             </h2>
-            <p className="text-gray-400 mb-8 text-lg">
+            <p className="mb-8 text-base text-gray-400 sm:text-lg">
                 Your next adventure is just a click away. Let AI handle the details.
             </p>
             
             <a 
               href="/planner"
-              className="rahi-btn-primary px-10 py-4 text-lg"
+              className="rahi-btn-primary px-8 py-3 text-base sm:px-10 sm:py-4 sm:text-lg"
             >
                Start Planning Now <ArrowRight className="h-5 w-5" />
             </a>
@@ -1179,9 +1179,9 @@ export default function Home() {
 
       {/* 11. FOOTER */}
       <footer id="community" className="relative z-20 border-t border-white/10 bg-black/40 backdrop-blur-xl py-16 text-center">
-        <div className="max-w-4xl mx-auto px-6 space-y-6">
+        <div className="mx-auto max-w-4xl space-y-6 px-4 sm:px-6">
           <Globe className="h-8 w-8 text-teal-500 mx-auto animate-pulse" />
-          <p className="text-gray-400 text-lg">Trusted by 1000+ student travelers across India 🇮🇳</p>
+          <p className="text-base text-gray-400 sm:text-lg">Trusted by 1000+ student travelers across India 🇮🇳</p>
           
           <div className="pt-8 text-sm text-gray-600 space-y-2">
             <p className="text-teal-400 font-medium tracking-wide">Every traveler is a Rahi.</p>
@@ -1199,7 +1199,7 @@ export default function Home() {
 function SectionHeader({ title }: { title: string }) {
   return (
     <div className="text-center">
-      <h2 className="text-3xl md:text-4xl font-display font-bold text-white mb-4">{title}</h2>
+      <h2 className="mb-4 text-2xl font-display font-bold text-white sm:text-3xl md:text-4xl">{title}</h2>
       <div className="h-1 w-20 bg-teal-500 rounded-full mx-auto" />
     </div>
   );
@@ -1230,7 +1230,7 @@ function FeatureCard({
     <motion.div 
       onClick={onClick}
       whileHover={{ y: -10 }}
-      className={`group relative p-8 rounded-3xl rahi-card backdrop-blur-sm transition-all duration-300 hover:bg-white/10 cursor-pointer ${color}`}
+      className={`group relative cursor-pointer rounded-3xl p-6 rahi-card backdrop-blur-sm transition-all duration-300 hover:bg-white/10 sm:p-8 ${color}`}
     >
       {eyebrow && (
         <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200/80">
@@ -1240,7 +1240,7 @@ function FeatureCard({
       <div className="mb-6 p-4 rounded-2xl bg-black/40 w-fit border border-white/5">
         {icon}
       </div>
-      <h3 className="text-2xl font-display font-bold mb-3 text-white">{title}</h3>
+      <h3 className="mb-3 text-xl font-display font-bold text-white sm:text-2xl">{title}</h3>
       <p className="text-gray-400 leading-relaxed">{desc}</p>
       {signal && (
         <p className="mt-4 rounded-xl border border-cyan-300/20 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">

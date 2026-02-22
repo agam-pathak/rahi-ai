@@ -89,22 +89,22 @@ export default function TripMembersPanel({ tripId, members, canManage }: Props) 
       {items.map((member) => (
         <div
           key={member.user_id}
-          className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-white/5 px-3 py-2 text-sm"
+          className="flex flex-col gap-3 rounded-lg border border-white/5 bg-white/5 px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between"
         >
-          <span className="text-gray-300 truncate">
+          <span className="w-full truncate text-gray-300 sm:w-auto">
             {member.profiles?.name ||
               member.profiles?.email ||
               `${member.user_id.slice(0, 6)}…`}
           </span>
           {canManage ? (
-            <div className="flex items-center gap-2">
+            <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-end">
               <select
                 value={member.role === "editor" ? "editor" : "viewer"}
                 disabled={pendingId === member.user_id}
                 onChange={(event) =>
                   updateRole(member.user_id, event.target.value as "editor" | "viewer")
                 }
-                className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-gray-200"
+                className="min-w-0 flex-1 rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[11px] text-gray-200 sm:flex-none"
               >
                 <option value="viewer">Viewer</option>
                 <option value="editor">Editor</option>

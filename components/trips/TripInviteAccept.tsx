@@ -87,7 +87,7 @@ export default function TripInviteAccept({ invite, isAuthed, userEmail }: Props)
       {!isAuthed && (
         <a
           href={`/login?next=/invite/${invite.token}`}
-          className="rahi-btn-primary text-sm px-4 py-2 inline-flex"
+          className="rahi-btn-primary inline-flex w-full px-4 py-2 text-sm sm:w-auto"
         >
           Sign in to accept
         </a>
@@ -99,7 +99,7 @@ export default function TripInviteAccept({ invite, isAuthed, userEmail }: Props)
           <button
             type="button"
             onClick={signOutAndSwitch}
-            className="ml-2 rounded-full border border-amber-300/40 px-2 py-0.5 text-[10px] text-amber-100 hover:border-amber-300/70 hover:text-white"
+            className="mt-2 inline-flex rounded-full border border-amber-300/40 px-2 py-0.5 text-[10px] text-amber-100 hover:border-amber-300/70 hover:text-white sm:ml-2 sm:mt-0"
           >
             Switch account
           </button>
@@ -111,14 +111,14 @@ export default function TripInviteAccept({ invite, isAuthed, userEmail }: Props)
           type="button"
           onClick={acceptInvite}
           disabled={alreadyAccepted || status === "loading" || status === "accepted" || status === "already"}
-          className="rahi-btn-primary text-sm px-4 py-2 inline-flex disabled:opacity-60"
+          className="rahi-btn-primary inline-flex w-full px-4 py-2 text-sm disabled:opacity-60 sm:w-auto"
         >
           {alreadyAccepted ? "Already accepted" : status === "loading" ? "Accepting..." : "Accept invite"}
         </button>
       )}
 
       {redirectUrl && (
-        <a href={redirectUrl} className="rahi-btn-secondary text-sm px-4 py-2 inline-flex">
+        <a href={redirectUrl} className="rahi-btn-secondary inline-flex w-full px-4 py-2 text-sm sm:w-auto">
           Open trip
         </a>
       )}
