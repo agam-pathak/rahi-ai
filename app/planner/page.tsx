@@ -47,6 +47,7 @@ import { usePlannerToast } from "./hooks/usePlannerToast";
 import {
   getPlanCapabilities,
   normalizePlanTier,
+  tierAtLeast,
   type PlanTier,
   type TrialStatus,
 } from "@/lib/billing/tier";
@@ -585,6 +586,46 @@ export default function PlannerPage() {
     return message;
   }, []);
 
+  const applyProfileBillingState = useCallback((data: any): PlanTier => {
+    setProfileId(typeof data?.id === "string" ? data.id : null);
+    const normalizedTier = normalizePlanTier(data?.plan_tier);
+    const derivedTier: PlanTier = normalizedTier
+      ? normalizedTier
+      : Boolean(data?.is_premium)
+        ? "premium"
+        : data?.trial_active
+          ? "basic"
+          : "free";
+    setPlanTier(derivedTier);
+    setIsPremium(tierAtLeast(derivedTier, "premium"));
+    setHasStripeCustomer(Boolean(data?.stripe_customer_id));
+    setTrialStatus(
+      data?.trial_status === "active" || data?.trial_status === "expired"
+        ? data.trial_status
+        : "none"
+    );
+    setTrialDaysLeft(
+      Number.isFinite(Number(data?.trial_days_left))
+        ? Math.max(0, Number(data.trial_days_left))
+        : 0
+    );
+    setTrialEndsAt(
+      typeof data?.trial_ends_at === "string" && data.trial_ends_at
+        ? data.trial_ends_at
+        : null
+    );
+    return derivedTier;
+  }, []);
+
+  const loadProfileBillingState = useCallback(async () => {
+    const res = await fetch("/api/ai/profile", { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`Profile request failed: ${res.status}`);
+    }
+    const data = await res.json();
+    return applyProfileBillingState(data);
+  }, [applyProfileBillingState]);
+
   const shareTripLink = () => {
     if (!trip?.share_code) {
       showToast("Share link not available yet.");
@@ -963,7 +1004,10 @@ export default function PlannerPage() {
     process.env.NODE_ENV !== "production" &&
     process.env.NEXT_PUBLIC_ALLOW_PREMIUM_PREVIEW === "true";
   const premiumPreview = allowPremiumPreview && searchParams.get("premium") === "1";
-  const effectiveTier: PlanTier = premiumPreview ? "premium" : planTier;
+  const effectiveTier: PlanTier =
+    premiumPreview && !tierAtLeast(planTier, "premium")
+      ? "premium"
+      : planTier;
   const planCapabilities = useMemo(
     () => getPlanCapabilities(effectiveTier),
     [effectiveTier]
@@ -1071,47 +1115,85 @@ export default function PlannerPage() {
 
   useEffect(() => {
     if (checkingAuth) return;
-    fetch("/api/ai/profile")
-      .then((res) => res.json())
-      .then((data) => {
-        setProfileId(typeof data?.id === "string" ? data.id : null);
-        const normalizedTier = normalizePlanTier(data?.plan_tier);
-        const derivedTier: PlanTier = normalizedTier
-          ? normalizedTier
-          : Boolean(data?.is_premium)
-            ? "premium"
-            : data?.trial_active
-              ? "basic"
-              : "free";
-        setPlanTier(derivedTier);
-        setIsPremium(derivedTier === "premium" || derivedTier === "pro");
-        setHasStripeCustomer(Boolean(data?.stripe_customer_id));
-        setTrialStatus(
-          data?.trial_status === "active" || data?.trial_status === "expired"
-            ? data.trial_status
-            : "none"
-        );
-        setTrialDaysLeft(
-          Number.isFinite(Number(data?.trial_days_left))
-            ? Math.max(0, Number(data.trial_days_left))
-            : 0
-        );
-        setTrialEndsAt(
-          typeof data?.trial_ends_at === "string" && data.trial_ends_at
-            ? data.trial_ends_at
-            : null
-        );
-      })
-      .catch(() => {
-        setProfileId(null);
-        setPlanTier("free");
-        setTrialStatus("none");
-        setTrialDaysLeft(0);
-        setTrialEndsAt(null);
-        setIsPremium(false);
-        setHasStripeCustomer(false);
-      });
-  }, [checkingAuth]);
+    let cancelled = false;
+    void loadProfileBillingState().catch(() => {
+      if (cancelled) return;
+      setProfileId(null);
+      setPlanTier("free");
+      setTrialStatus("none");
+      setTrialDaysLeft(0);
+      setTrialEndsAt(null);
+      setIsPremium(false);
+      setHasStripeCustomer(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkingAuth, loadProfileBillingState]);
+
+  useEffect(() => {
+    if (checkingAuth) return;
+    if (searchParams.get("billing") !== "success") return;
+    const requestedTier = normalizePlanTier(searchParams.get("tier"));
+    const expectedTier: PlanTier = requestedTier === "pro" ? "pro" : "premium";
+    let cancelled = false;
+
+    const syncBillingState = async () => {
+      showToast(
+        expectedTier === "pro"
+          ? "Payment succeeded. Syncing your Pro plan..."
+          : "Payment succeeded. Syncing your Premium plan..."
+      );
+
+      let synced = false;
+      for (let attempt = 0; attempt < 6 && !cancelled; attempt += 1) {
+        try {
+          const resolvedTier = await loadProfileBillingState();
+          if (tierAtLeast(resolvedTier, expectedTier)) {
+            synced = true;
+            break;
+          }
+        } catch {}
+
+        if (attempt < 5) {
+          await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        }
+      }
+
+      if (cancelled) return;
+
+      showToast(
+        synced
+          ? expectedTier === "pro"
+            ? "Pro plan activated."
+            : "Premium plan activated."
+          : "Payment received. Plan sync may take a moment."
+      );
+
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("billing");
+      params.delete("tier");
+      const nextQuery = params.toString();
+      router.replace(nextQuery ? `/planner?${nextQuery}` : "/planner");
+    };
+
+    void syncBillingState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [checkingAuth, loadProfileBillingState, router, searchParams, showToast]);
+
+  useEffect(() => {
+    if (checkingAuth) return;
+    if (searchParams.get("billing") !== "cancel") return;
+    showToast("Checkout was canceled.");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("billing");
+    params.delete("tier");
+    const nextQuery = params.toString();
+    router.replace(nextQuery ? `/planner?${nextQuery}` : "/planner");
+  }, [checkingAuth, router, searchParams, showToast]);
 
   useEffect(() => {
     return () => {

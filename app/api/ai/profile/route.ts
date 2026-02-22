@@ -120,10 +120,14 @@ export async function GET(req: Request) {
   const clientId = getClientId(req);
   const rl = rateLimit(`ai:profile:${clientId}`, { limit: 30, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
+  const responseHeaders = {
+    ...rlHeaders,
+    "Cache-Control": "no-store",
+  };
   if (!rl.allowed) {
     return NextResponse.json(
       { error: "Rate limit exceeded" },
-      { status: 429, headers: rlHeaders }
+      { status: 429, headers: responseHeaders }
     );
   }
 
@@ -132,7 +136,10 @@ export async function GET(req: Request) {
   const user = await getRequestUser(req, supabase);
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: rlHeaders });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: responseHeaders }
+    );
   }
 
   // Try fetch profile
@@ -218,7 +225,7 @@ export async function GET(req: Request) {
       trial_ends_at: trial.trialEndsAt,
       capabilities,
     },
-    { headers: rlHeaders }
+    { headers: responseHeaders }
   );
 }
 

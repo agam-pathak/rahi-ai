@@ -45,7 +45,7 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const res = await fetch("/api/ai/profile");
+        const res = await fetch("/api/ai/profile", { cache: "no-store" });
         if (!res.ok) {
           setError(
             res.status === 401
