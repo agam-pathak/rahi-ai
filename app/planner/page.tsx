@@ -255,6 +255,8 @@ export default function PlannerPage() {
     lang: "en-IN",
   });
   const bottomRef = useRef<HTMLDivElement>(null);
+  const chatMessagesRef = useRef<string[]>([]);
+  const chatRequestInFlightRef = useRef(false);
   const [listening, setListening] = useState(false);
   const { toast, showToast } = usePlannerToast();
   const [regeneratingDay, setRegeneratingDay] = useState<number | null>(null);
@@ -579,6 +581,9 @@ export default function PlannerPage() {
 
     if (res.status === 429) {
       return "Too many requests. Please wait a minute.";
+    }
+    if (res.status === 401) {
+      return "Please sign in again to use Chat Buddy.";
     }
     if (message === "AI key missing") {
       return "AI key missing. Add GROQ_API_KEY in .env.local.";
@@ -1065,6 +1070,10 @@ export default function PlannerPage() {
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     bottomRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" });
   }, [chatMessages, typing]);
+
+  useEffect(() => {
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages]);
 
   // Load history
   useEffect(() => {
@@ -1611,22 +1620,59 @@ export default function PlannerPage() {
     }
   };
 
+  const parseBudgetToken = (raw: string) => {
+    const compact = raw.replace(/,/g, "").trim().toLowerCase();
+    const match = compact.match(/^(\d+(?:\.\d+)?)([km]?)$/i);
+    if (!match) return null;
+    const value = Number(match[1]);
+    if (!Number.isFinite(value) || value <= 0) return null;
+    const suffix = match[2]?.toLowerCase();
+    if (suffix === "k") return Math.round(value * 1_000);
+    if (suffix === "m") return Math.round(value * 1_000_000);
+    return Math.round(value);
+  };
+
   const syncFieldsFromChat = (text: string) => {
-    const daysMatch = text.match(/day\s*(\d+)/gi);
-    if (daysMatch) setDurationInput(String(daysMatch.length));
-    
-    const destMatch = text.match(/trip to ([a-zA-Z\s]+)/i);
-    if (destMatch) {
-      const inferredDestination = destMatch[1]
-        .trim()
-        .replace(/\s+(for|under|with|budget).*/i, "");
-      if (inferredDestination) setDestination(inferredDestination);
+    const dayNumbers = Array.from(text.matchAll(/\bday\s*(\d{1,2})\b/gi))
+      .map((match) => Number(match[1]))
+      .filter((value) => Number.isFinite(value) && value > 0 && value <= 30);
+    if (dayNumbers.length > 0) {
+      setDurationInput(String(Math.max(...dayNumbers)));
+    } else {
+      const dayRangeMatch = text.match(/\b(\d{1,2})\s*(?:day|days)\b/i);
+      if (dayRangeMatch) {
+        setDurationInput(dayRangeMatch[1]);
+      }
     }
-    
-    const budgetMatch = text.match(/₹\s*([\d,]+)/);
-    if (budgetMatch) setBudget(budgetMatch[1].replace(/,/g, ""));
-    
-    if(!interests) setInterests("sightseeing, food, culture");
+
+    const destinationPatterns = [
+      /\b(?:trip|travel|vacation|holiday|journey)\s+(?:to|in)\s+([a-zA-Z][a-zA-Z\s'-]{1,40})/i,
+      /\bdestination\s*[:\-]\s*([a-zA-Z][a-zA-Z\s'-]{1,40})/i,
+      /^\s*([a-zA-Z][a-zA-Z\s'-]{1,40})\s+itinerary\b/im,
+    ];
+    for (const pattern of destinationPatterns) {
+      const match = text.match(pattern);
+      if (!match?.[1]) continue;
+      const inferredDestination = match[1]
+        .replace(/\s+(for|under|with|budget|itinerary|days?).*/i, "")
+        .replace(/[.,;:!?].*$/, "")
+        .trim();
+      if (inferredDestination) {
+        setDestination(inferredDestination);
+        break;
+      }
+    }
+
+    const budgetMatch =
+      text.match(/(?:₹|rs\.?|inr)\s*([\d,.]+\s*[km]?)/i) ||
+      text.match(/\bbudget\s*(?:of|is|around|under|:)?\s*([\d,.]+\s*[km]?)/i);
+    const parsedBudget =
+      budgetMatch?.[1] ? parseBudgetToken(budgetMatch[1].trim()) : null;
+    if (parsedBudget) {
+      setBudget(String(parsedBudget));
+    }
+
+    if (!interests.trim()) setInterests("sightseeing, food, culture");
   };
 
   const handleCommands = (userMsg: string, aiMsg: string) => {
@@ -1637,7 +1683,17 @@ export default function PlannerPage() {
   };
 
   const looksLikeItinerary = (text: string) => {
-    return /day\s*1/i.test(text);
+    const normalized = text.toLowerCase();
+    if (!normalized.trim()) return false;
+    if (/\bday\s*(1|one)\b/.test(normalized)) return true;
+    if ((normalized.match(/\bday\s*\d+\b/g) ?? []).length >= 2) return true;
+    if (
+      /itinerary|travel plan|day-wise plan/.test(normalized) &&
+      /morning|afternoon|evening|night/.test(normalized)
+    ) {
+      return true;
+    }
+    return false;
   };
 
   const addGroupMember = () => {
@@ -3212,8 +3268,31 @@ export default function PlannerPage() {
       if (isVoice) setVoiceStatus("idle");
       return;
     }
+    if (chatRequestInFlightRef.current || typing) {
+      if (isVoice) setVoiceStatus("idle");
+      showToast("Rahi is still replying. Please wait.");
+      return;
+    }
+    chatRequestInFlightRef.current = true;
     if (isVoice) setVoiceStatus("thinking");
-    setChatMessages((prev) => [...prev, "You: " + userMsg]);
+    const userEntry = "You: " + userMsg;
+    const historyForRequest = [...chatMessagesRef.current.slice(-5), userEntry].slice(-6);
+    const parsedBudget = parseBudget(budget);
+    const fallbackBudget = Number(trip?.meta?.total_estimated_budget ?? NaN);
+    const contextBudget = Number.isFinite(parsedBudget)
+      ? parsedBudget
+      : Number.isFinite(fallbackBudget)
+        ? fallbackBudget
+        : null;
+    const contextDestination = destination.trim() || trip?.destination || null;
+    const contextInterests = interests.trim() || null;
+    const contextDaysCandidate = Number(durationInput);
+    const contextDays =
+      Number.isFinite(contextDaysCandidate) && contextDaysCandidate > 0
+        ? contextDaysCandidate
+        : trip?.days?.length ?? null;
+
+    setChatMessages((prev) => [...prev, userEntry]);
     setChatInput("");
     setTyping(true);
 
@@ -3223,7 +3302,15 @@ export default function PlannerPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userMsg,
-          history: chatMessages.slice(-6),
+          history: historyForRequest,
+          context: {
+            destination: contextDestination,
+            days: contextDays,
+            budget: contextBudget,
+            interests: contextInterests,
+            stage: plannerStage,
+            mode: plannerMode,
+          },
         }),
       });
 
@@ -3259,6 +3346,7 @@ export default function PlannerPage() {
       setChatMessages((prev) => [...prev, "Rahi.AI: Sorry, I had trouble responding."]);
       if (isVoice) setVoiceStatus("idle");
     } finally {
+      chatRequestInFlightRef.current = false;
       setTyping(false);
     }
   };
@@ -3990,6 +4078,16 @@ export default function PlannerPage() {
               >
                 {stagePrimaryAction.label}
               </button>
+              {trip?.share_code && (
+                <button
+                  type="button"
+                  className="rahi-btn-secondary px-4 py-2 text-sm"
+                  onClick={() => router.push(`/trip/${trip.share_code}/live`)}
+                >
+                  <Plane className="h-4 w-4" />
+                  Open Live Day
+                </button>
+              )}
               {plannerStage === "optimize" && (
                 <button
                   type="button"

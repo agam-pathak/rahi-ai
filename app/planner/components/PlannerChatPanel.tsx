@@ -91,9 +91,13 @@ export default function PlannerChatPanel({
                 return;
               }
               setChatInput(text);
-              window.setTimeout(() => {
-                void sendChat(text, "voice");
-              }, 200);
+              if (voiceSettings.autoSend) {
+                window.setTimeout(() => {
+                  void sendChat(text, "voice");
+                }, 200);
+              } else {
+                setVoiceStatus("idle");
+              }
             }}
             onListening={(active) => {
               setListening(active);
@@ -134,6 +138,7 @@ export default function PlannerChatPanel({
               <button
                 type="button"
                 className="rahi-chat-prompt rounded-full border border-white/10 bg-white/5 px-3 py-1.5 transition hover:bg-white/10"
+                disabled={typing}
                 onClick={() => {
                   void sendChat("Plan a trip to Goa");
                 }}
@@ -143,6 +148,7 @@ export default function PlannerChatPanel({
               <button
                 type="button"
                 className="rahi-chat-prompt rounded-full border border-white/10 bg-white/5 px-3 py-1.5 transition hover:bg-white/10"
+                disabled={typing}
                 onClick={() => {
                   void sendChat("Budget tips for students");
                 }}
@@ -225,11 +231,17 @@ export default function PlannerChatPanel({
         <div className="flex gap-2">
           <input
             className="flex-1 rahi-input rahi-input-premium"
-            placeholder="Ask Rahi (e.g., '3 day trip to Manali under 10k')..."
+            placeholder={
+              typing
+                ? "Rahi is replying..."
+                : "Ask Rahi (e.g., '3 day trip to Manali under 10k')..."
+            }
             value={chatInput}
+            disabled={typing}
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
+                e.preventDefault();
                 void sendChat();
               }
             }}
@@ -237,10 +249,11 @@ export default function PlannerChatPanel({
           <button
             type="button"
             aria-label="Send chat message"
+            disabled={typing}
             onClick={() => {
               void sendChat();
             }}
-            className="rahi-btn-primary rahi-chat-send px-3 py-3"
+            className="rahi-btn-primary rahi-chat-send px-3 py-3 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Send className="w-5 h-5" />
           </button>
