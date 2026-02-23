@@ -45,7 +45,7 @@ export async function POST(
   { params }: RouteContext
 ) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`trips:member:${clientId}`, { limit: 15, windowMs: 60_000 });
+  const rl = await rateLimit(`trips:member:${clientId}`, { limit: 15, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -116,3 +116,4 @@ export async function POST(
     );
   }
 }
+

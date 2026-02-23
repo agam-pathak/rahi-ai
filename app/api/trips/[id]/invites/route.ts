@@ -67,7 +67,7 @@ const sendInviteEmail = async ({
 
 export async function POST(req: Request, { params }: RouteContext) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`trips:invite:${clientId}`, { limit: 12, windowMs: 60_000 });
+  const rl = await rateLimit(`trips:invite:${clientId}`, { limit: 12, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -198,7 +198,7 @@ export async function POST(req: Request, { params }: RouteContext) {
 
 export async function GET(req: Request, { params }: RouteContext) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`trips:invite:${clientId}`, { limit: 30, windowMs: 60_000 });
+  const rl = await rateLimit(`trips:invite:${clientId}`, { limit: 30, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -271,7 +271,7 @@ export async function GET(req: Request, { params }: RouteContext) {
 
 export async function DELETE(req: Request, { params }: RouteContext) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`trips:invite:${clientId}`, { limit: 20, windowMs: 60_000 });
+  const rl = await rateLimit(`trips:invite:${clientId}`, { limit: 20, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -352,3 +352,4 @@ export async function DELETE(req: Request, { params }: RouteContext) {
     );
   }
 }
+

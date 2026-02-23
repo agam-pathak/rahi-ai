@@ -93,6 +93,7 @@ export const TripMetaSchema = z.object({
   packing_suggestions: z.array(z.string()).optional(),
   prep_checklist: z.record(z.string(), z.boolean()).optional(),
   group_state: GroupStateSchema.optional(),
+  chat_thread: z.array(z.string()).optional(),
   signature_story: z.string().optional(),
   revision: z.number().int().nonnegative().optional(),
   last_saved_at: z.string().datetime().optional(),

@@ -4,7 +4,7 @@ import { getClientId, logAiRequest, rateLimit, rateLimitHeaders } from "@/lib/ai
 export async function POST(req: Request) {
   try {
     const clientId = getClientId(req);
-    const rl = rateLimit(`ai:weather:${clientId}`, { limit: 20, windowMs: 60_000 });
+    const rl = await rateLimit(`ai:weather:${clientId}`, { limit: 20, windowMs: 60_000 });
     const rlHeaders = rateLimitHeaders(rl);
     if (!rl.allowed) {
       return NextResponse.json(
@@ -110,3 +110,4 @@ export async function POST(req: Request) {
     );
   }
 }
+

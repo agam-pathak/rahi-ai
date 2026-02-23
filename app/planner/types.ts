@@ -63,6 +63,7 @@ export type TripMeta = {
   packing_suggestions?: string[];
   prep_checklist?: Record<string, boolean>;
   group_state?: GroupState;
+  chat_thread?: string[];
   signature_story?: string;
   revision?: number;
   last_saved_at?: string;

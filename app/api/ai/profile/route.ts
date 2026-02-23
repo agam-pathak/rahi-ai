@@ -118,7 +118,7 @@ const resolveStripeTier = async ({
 
 export async function GET(req: Request) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`ai:profile:${clientId}`, { limit: 30, windowMs: 60_000 });
+  const rl = await rateLimit(`ai:profile:${clientId}`, { limit: 30, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   const responseHeaders = {
     ...rlHeaders,
@@ -231,7 +231,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`ai:profile:${clientId}`, { limit: 30, windowMs: 60_000 });
+  const rl = await rateLimit(`ai:profile:${clientId}`, { limit: 30, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -296,3 +296,4 @@ export async function POST(req: Request) {
 
   return NextResponse.json(data, { headers: rlHeaders });
 }
+

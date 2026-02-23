@@ -16,7 +16,7 @@ import { getClientId, logAiRequest, rateLimit, rateLimitHeaders } from "@/lib/ai
 export async function POST(req: Request) {
   try {
     const clientId = getClientId(req);
-    const rl = rateLimit(`ai:trip:${clientId}`, { limit: 20, windowMs: 60_000 });
+    const rl = await rateLimit(`ai:trip:${clientId}`, { limit: 20, windowMs: 60_000 });
     const rlHeaders = rateLimitHeaders(rl);
     const startedAt = Date.now();
     if (!rl.allowed) {
@@ -266,3 +266,4 @@ export async function POST(req: Request) {
     );
   }
 }
+

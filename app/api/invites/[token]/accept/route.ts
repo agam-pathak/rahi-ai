@@ -10,7 +10,7 @@ type RouteContext = {
 
 export async function POST(req: Request, { params }: RouteContext) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`invites:accept:${clientId}`, { limit: 20, windowMs: 60_000 });
+  const rl = await rateLimit(`invites:accept:${clientId}`, { limit: 20, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -130,3 +130,4 @@ export async function POST(req: Request, { params }: RouteContext) {
     );
   }
 }
+

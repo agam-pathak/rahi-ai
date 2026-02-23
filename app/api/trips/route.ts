@@ -6,7 +6,7 @@ import { getClientId, rateLimit, rateLimitHeaders } from "@/lib/ai/guard";
 
 export async function GET(req: Request) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`trips:list:${clientId}`, { limit: 60, windowMs: 60_000 });
+  const rl = await rateLimit(`trips:list:${clientId}`, { limit: 60, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   if (!rl.allowed) {
     return NextResponse.json(
@@ -33,3 +33,4 @@ export async function GET(req: Request) {
 
   return NextResponse.json(data);
 }
+

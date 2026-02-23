@@ -14,7 +14,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(req: Request) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`ai:stream:${clientId}`, { limit: 15, windowMs: 60_000 });
+  const rl = await rateLimit(`ai:stream:${clientId}`, { limit: 15, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   const startedAt = Date.now();
   if (!rl.allowed) {
@@ -283,3 +283,4 @@ export async function POST(req: Request) {
     },
   });
 }
+

@@ -66,6 +66,8 @@ const ACTIVITY_TYPE_COUNT = 5;
 const WEATHER_RISK_PATTERN = /rain|storm|drizzle|shower|thunder|snow|hail/i;
 const OUTDOOR_ACTIVITY_TYPES = new Set(["sightseeing", "experience"]);
 const PLANNER_STAGE_ORDER = ["build", "optimize", "share"] as const;
+const CHAT_THREAD_MAX_MESSAGES = 40;
+const CHAT_THREAD_MAX_MESSAGE_LENGTH = 500;
 type PlannerStage = (typeof PLANNER_STAGE_ORDER)[number];
 type IndiaTemplatePreset = {
   id: string;
@@ -88,6 +90,15 @@ type TripRow = {
   is_public?: boolean | null;
   created_at?: string;
   updated_at?: string;
+};
+
+const normalizeChatThread = (value: unknown) => {
+  if (!Array.isArray(value)) return [] as string[];
+  return value
+    .map((entry) => String(entry ?? "").replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .map((entry) => entry.slice(0, CHAT_THREAD_MAX_MESSAGE_LENGTH))
+    .slice(-CHAT_THREAD_MAX_MESSAGES);
 };
 
 const INDIA_TEMPLATE_PRESETS: IndiaTemplatePreset[] = [
@@ -257,6 +268,7 @@ export default function PlannerPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const chatMessagesRef = useRef<string[]>([]);
   const chatRequestInFlightRef = useRef(false);
+  const hydratingTripChatRef = useRef(false);
   const [listening, setListening] = useState(false);
   const { toast, showToast } = usePlannerToast();
   const [regeneratingDay, setRegeneratingDay] = useState<number | null>(null);
@@ -330,10 +342,12 @@ export default function PlannerPage() {
       const normalizedTrip = applyBudgetToTrip({
         ...entry.tripData,
         destination: destinationValue,
-        meta:
-          entry.tripData?.meta ?? {
+        meta: {
+          ...(entry.tripData?.meta ?? {
             total_estimated_budget: parseBudget(budgetInputValue) || 0,
-          },
+          }),
+          chat_thread: normalizeChatThread(entry.tripData?.meta?.chat_thread),
+        },
         is_public:
           typeof entry.tripData?.is_public === "boolean"
             ? entry.tripData.is_public
@@ -487,10 +501,12 @@ export default function PlannerPage() {
             : typeof baseTrip.is_public === "boolean"
               ? baseTrip.is_public
               : true,
-        meta:
-          baseTrip.meta ?? {
+        meta: {
+          ...(baseTrip.meta ?? {
             total_estimated_budget: parseBudget(budgetInputValue) || 0,
-          },
+          }),
+          chat_thread: normalizeChatThread(baseTrip.meta?.chat_thread),
+        },
       });
 
       const parsedTime = Date.parse(String(row.updated_at ?? row.created_at ?? ""));
@@ -1074,6 +1090,20 @@ export default function PlannerPage() {
   useEffect(() => {
     chatMessagesRef.current = chatMessages;
   }, [chatMessages]);
+
+  useEffect(() => {
+    const tripKey = trip?.id
+      ? `id:${trip.id}`
+      : trip?.share_code
+        ? `share:${trip.share_code}`
+        : null;
+    if (!tripKey) return;
+    const persistedThread = normalizeChatThread(trip?.meta?.chat_thread);
+    const currentThread = normalizeChatThread(chatMessagesRef.current);
+    if (persistedThread.join("\u0001") === currentThread.join("\u0001")) return;
+    hydratingTripChatRef.current = true;
+    setChatMessages(persistedThread);
+  }, [trip?.id, trip?.share_code]);
 
   // Load history
   useEffect(() => {
@@ -1798,7 +1828,16 @@ export default function PlannerPage() {
     setDurationInput(entry.daysInput);
     setBudget(entry.budgetInput);
     setInterests(entry.interestsInput);
-    setTrip(entry.tripData);
+    const normalizedThread = normalizeChatThread(entry.tripData?.meta?.chat_thread);
+    hydratingTripChatRef.current = true;
+    setChatMessages(normalizedThread);
+    setTrip({
+      ...entry.tripData,
+      meta: {
+        ...entry.tripData.meta,
+        chat_thread: normalizedThread,
+      },
+    });
     void fetchWeather(
       entry.destination,
       Number(entry.daysInput) || entry.tripData.days?.length || 5
@@ -1829,6 +1868,26 @@ export default function PlannerPage() {
       return next;
     });
   }, [clearHiddenForTrip, writeLocalHistory]);
+
+  useEffect(() => {
+    if (hydratingTripChatRef.current) {
+      hydratingTripChatRef.current = false;
+      return;
+    }
+    if (!trip) return;
+    const nextThread = normalizeChatThread(chatMessages);
+    const prevThread = normalizeChatThread(trip.meta?.chat_thread);
+    if (nextThread.join("\u0001") === prevThread.join("\u0001")) return;
+    const nextTrip: Trip = {
+      ...trip,
+      meta: {
+        ...trip.meta,
+        chat_thread: nextThread,
+      },
+    };
+    setTrip(nextTrip);
+    updateHistoryEntry(nextTrip);
+  }, [chatMessages, trip, updateHistoryEntry]);
 
   const persistTripResult = useCallback(
     async (updatedTrip: Trip, options?: { reason?: "manual" | "autosave" | "queued" }) => {
@@ -2091,11 +2150,15 @@ export default function PlannerPage() {
     setLoading(true);
     setFormError(null);
     setStreamError(null);
+    const currentChatThread = normalizeChatThread(chatMessagesRef.current);
     // Initialize empty trip structure
     setTrip({
       destination: destinationValue,
       days: [],
-      meta: { total_estimated_budget: budgetNum },
+      meta: {
+        total_estimated_budget: budgetNum,
+        chat_thread: currentChatThread,
+      },
       is_public: true
     });
     setWeather([]);
@@ -2128,7 +2191,10 @@ export default function PlannerPage() {
 
       // Local variables to accumulate data (needed because setState is async)
       let accumulatedDays: DayPlan[] = [];
-      let accumulatedMeta = { total_estimated_budget: 0 };
+      let accumulatedMeta = {
+        total_estimated_budget: 0,
+        chat_thread: currentChatThread,
+      };
       let shareCode = "";
       let tripId = "";
       let isPublic = true;
@@ -2159,7 +2225,19 @@ export default function PlannerPage() {
 
             if (msg.type === "meta") {
               accumulatedMeta = msg.payload;
-              setTrip(prev => prev ? { ...prev, meta: accumulatedMeta } : null);
+              setTrip((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      meta: {
+                        ...accumulatedMeta,
+                        chat_thread: normalizeChatThread(
+                          prev.meta?.chat_thread ?? currentChatThread
+                        ),
+                      },
+                    }
+                  : null
+              );
             }
 
             if (msg.type === "share_code") {
@@ -2203,7 +2281,19 @@ export default function PlannerPage() {
             }
             if (msg.type === "meta") {
               accumulatedMeta = msg.payload;
-              setTrip((prev) => (prev ? { ...prev, meta: accumulatedMeta } : null));
+              setTrip((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      meta: {
+                        ...accumulatedMeta,
+                        chat_thread: normalizeChatThread(
+                          prev.meta?.chat_thread ?? currentChatThread
+                        ),
+                      },
+                    }
+                  : null
+              );
             }
             if (msg.type === "share_code") {
               shareCode = msg.payload;
@@ -2231,7 +2321,12 @@ export default function PlannerPage() {
         id: tripId || undefined,
         destination: destinationValue,
         days: accumulatedDays,
-        meta: accumulatedMeta,
+        meta: {
+          ...accumulatedMeta,
+          chat_thread: normalizeChatThread(
+            accumulatedMeta.chat_thread ?? chatMessagesRef.current
+          ),
+        },
         share_code: shareCode,
         is_public: isPublic
       });

@@ -7,7 +7,7 @@ const uuidv4 = () => globalThis.crypto.randomUUID();
 
 export async function POST(req: Request) {
   const clientId = getClientId(req);
-  const rl = rateLimit(`ai:activity:${clientId}`, { limit: 20, windowMs: 60_000 });
+  const rl = await rateLimit(`ai:activity:${clientId}`, { limit: 20, windowMs: 60_000 });
   const rlHeaders = rateLimitHeaders(rl);
   const startedAt = Date.now();
   if (!rl.allowed) {
@@ -203,3 +203,4 @@ Return ONLY JSON.
     );
   }
 }
+
