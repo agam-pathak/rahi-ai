@@ -209,6 +209,9 @@ export default async function TripView({ params }: PageProps) {
             Rahi.AI
           </div>
           <div className="flex items-center gap-3">
+            <a href={`/trip/${shareCode}/live`} className="rahi-btn-primary text-xs px-3 py-2">
+              Live Day
+            </a>
             <a href="/" className="rahi-btn-secondary text-xs px-3 py-2">
               Home
             </a>
@@ -217,12 +220,22 @@ export default async function TripView({ params }: PageProps) {
         </div>
         {/* Trip Header */}
         <div className="rahi-panel p-4 sm:p-6">
-          <h1 className="text-3xl font-display font-bold text-white">
-            {trip.destination}
-          </h1>
-          <p className="text-sm text-rahi-muted mt-1">
-            {trip.days} days • ₹{trip.budget}
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-display font-bold text-white">
+                {trip.destination}
+              </h1>
+              <p className="text-sm text-rahi-muted mt-1">
+                {trip.days} days • ₹{trip.budget}
+              </p>
+            </div>
+            <a
+              href={`/trip/${shareCode}/live`}
+              className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/35 bg-cyan-500/15 px-3 py-2 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/20"
+            >
+              Open Live Day Mode
+            </a>
+          </div>
         </div>
 
         <div className="rahi-panel p-4 sm:p-6">
