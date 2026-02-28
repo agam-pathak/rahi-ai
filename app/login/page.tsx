@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Loader2, ArrowRight, Plane, CheckCircle2 } from "lucide-react";
@@ -28,6 +27,16 @@ const normalizeAuthError = (input: unknown) => {
     lower.includes("offline");
   if (looksLikeNetworkFailure) return AUTH_NETWORK_ERROR_MESSAGE;
   return message || "Authentication failed. Please try again.";
+};
+
+const extractApiError = async (res: Response) => {
+  try {
+    const payload = (await res.json()) as { error?: unknown };
+    if (typeof payload?.error === "string" && payload.error.trim()) {
+      return payload.error.trim();
+    }
+  } catch {}
+  return `Authentication failed (${res.status}).`;
 };
 
 export default function LoginPage() {
@@ -57,16 +66,39 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const res =
-        mode === "login"
-          ? await supabase.auth.signInWithPassword({ email, password })
-          : await supabase.auth.signUp({ email, password });
-      if (res.error) {
-        setError(normalizeAuthError(res.error));
+      const endpoint =
+        mode === "login" ? "/api/auth/login" : "/api/auth/signup";
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+        }),
+      });
+      if (!res.ok) {
+        const apiError = await extractApiError(res);
+        setError(normalizeAuthError(apiError));
         return;
       }
+
+      const payload = (await res.json()) as {
+        success?: boolean;
+        requires_email_verification?: boolean;
+      };
+      if (!payload.success) {
+        setError("Authentication failed. Please try again.");
+        return;
+      }
+
       setSuccess(true);
       setTimeout(() => {
+        if (mode === "signup" && payload.requires_email_verification) {
+          router.replace("/login");
+          return;
+        }
         router.replace(nextPath);
       }, 2000);
     } catch (err) {
@@ -79,15 +111,20 @@ export default function LoginPage() {
   const googleLogin = async () => {
     setError(null);
     try {
-      const result = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}${nextPath}`,
-        },
+      const res = await fetch(`/api/auth/google?next=${encodeURIComponent(nextPath)}`, {
+        method: "GET",
       });
-      if (result.error) {
-        setError(normalizeAuthError(result.error));
+      if (!res.ok) {
+        const apiError = await extractApiError(res);
+        setError(normalizeAuthError(apiError));
+        return;
       }
+      const payload = (await res.json()) as { success?: boolean; url?: string };
+      if (!payload.success || !payload.url) {
+        setError("Unable to start Google sign in. Please try again.");
+        return;
+      }
+      window.location.assign(payload.url);
     } catch (err) {
       setError(normalizeAuthError(err));
     }
