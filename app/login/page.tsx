@@ -7,6 +7,29 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Loader2, ArrowRight, Plane, CheckCircle2 } from "lucide-react";
 import RahiBackground from "@/components/RahiBackground";
 
+const AUTH_NETWORK_ERROR_MESSAGE =
+  "Cannot reach authentication server right now. Please check your network or try again shortly.";
+
+const normalizeAuthError = (input: unknown) => {
+  const rawMessage =
+    typeof input === "string"
+      ? input
+      : input && typeof input === "object" && "message" in input
+        ? String((input as { message?: unknown }).message ?? "")
+        : "";
+  const message = rawMessage.trim();
+  const lower = message.toLowerCase();
+  const looksLikeNetworkFailure =
+    lower.includes("failed to fetch") ||
+    lower.includes("fetch failed") ||
+    lower.includes("networkerror") ||
+    lower.includes("timed out") ||
+    lower.includes("err_connection") ||
+    lower.includes("offline");
+  if (looksLikeNetworkFailure) return AUTH_NETWORK_ERROR_MESSAGE;
+  return message || "Authentication failed. Please try again.";
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -33,28 +56,41 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    const res =
-      mode === "login"
-        ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password });
-    setLoading(false);
-    if (res.error) {
-      setError(res.error.message);
-    } else {
+    try {
+      const res =
+        mode === "login"
+          ? await supabase.auth.signInWithPassword({ email, password })
+          : await supabase.auth.signUp({ email, password });
+      if (res.error) {
+        setError(normalizeAuthError(res.error));
+        return;
+      }
       setSuccess(true);
       setTimeout(() => {
         router.replace(nextPath);
       }, 2000);
+    } catch (err) {
+      setError(normalizeAuthError(err));
+    } finally {
+      setLoading(false);
     }
   };
 
   const googleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}${nextPath}`,
-      },
-    });
+    setError(null);
+    try {
+      const result = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}${nextPath}`,
+        },
+      });
+      if (result.error) {
+        setError(normalizeAuthError(result.error));
+      }
+    } catch (err) {
+      setError(normalizeAuthError(err));
+    }
   };
 
   return (
