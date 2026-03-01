@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, Loader2, ArrowRight, Plane, CheckCircle2 } from "lucide-react";
+import { Mail, Lock, Loader2, ArrowRight, Plane } from "lucide-react";
 import RahiBackground from "@/components/RahiBackground";
 
 const AUTH_NETWORK_ERROR_MESSAGE =
@@ -27,16 +28,6 @@ const normalizeAuthError = (input: unknown) => {
     lower.includes("offline");
   if (looksLikeNetworkFailure) return AUTH_NETWORK_ERROR_MESSAGE;
   return message || "Authentication failed. Please try again.";
-};
-
-const extractApiError = async (res: Response) => {
-  try {
-    const payload = (await res.json()) as { error?: unknown };
-    if (typeof payload?.error === "string" && payload.error.trim()) {
-      return payload.error.trim();
-    }
-  } catch {}
-  return `Authentication failed (${res.status}).`;
 };
 
 export default function LoginPage() {
@@ -66,36 +57,41 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const endpoint =
-        mode === "login" ? "/api/auth/login" : "/api/auth/signup";
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: email.trim(),
+      const emailInput = email.trim().toLowerCase();
+      if (mode === "login") {
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: emailInput,
           password,
-        }),
-      });
-      if (!res.ok) {
-        const apiError = await extractApiError(res);
-        setError(normalizeAuthError(apiError));
-        return;
-      }
-
-      const payload = (await res.json()) as {
-        success?: boolean;
-        requires_email_verification?: boolean;
-      };
-      if (!payload.success) {
-        setError("Authentication failed. Please try again.");
-        return;
+        });
+        if (signInError) {
+          setError(normalizeAuthError(signInError));
+          return;
+        }
+        if (!data.session || !data.user) {
+          setError("Authentication failed. Please try again.");
+          return;
+        }
+      } else {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: emailInput,
+          password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/login`,
+          },
+        });
+        if (signUpError) {
+          setError(normalizeAuthError(signUpError));
+          return;
+        }
+        if (!data.user) {
+          setError("Authentication failed. Please try again.");
+          return;
+        }
       }
 
       setSuccess(true);
       setTimeout(() => {
-        if (mode === "signup" && payload.requires_email_verification) {
+        if (mode === "signup") {
           router.replace("/login");
           return;
         }
@@ -111,20 +107,16 @@ export default function LoginPage() {
   const googleLogin = async () => {
     setError(null);
     try {
-      const res = await fetch(`/api/auth/google?next=${encodeURIComponent(nextPath)}`, {
-        method: "GET",
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}${nextPath}`,
+        },
       });
-      if (!res.ok) {
-        const apiError = await extractApiError(res);
-        setError(normalizeAuthError(apiError));
+      if (googleError) {
+        setError(normalizeAuthError(googleError));
         return;
       }
-      const payload = (await res.json()) as { success?: boolean; url?: string };
-      if (!payload.success || !payload.url) {
-        setError("Unable to start Google sign in. Please try again.");
-        return;
-      }
-      window.location.assign(payload.url);
     } catch (err) {
       setError(normalizeAuthError(err));
     }
