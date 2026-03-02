@@ -167,6 +167,7 @@ export default function Home() {
   const shouldReduceMotion = useReducedMotion();
   const [user, setUser] = useState<User | null>(null);
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
+  const [avatarImageFailed, setAvatarImageFailed] = useState(false);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [navCompact, setNavCompact] = useState(false);
@@ -289,6 +290,7 @@ export default function Home() {
 
   const profileAvatarUrl =
     profileAvatar || (user?.user_metadata?.avatar_url as string | undefined) || null;
+  const resolvedProfileAvatarUrl = profileAvatarUrl && !avatarImageFailed ? profileAvatarUrl : null;
 
   const profileInitials = useMemo(() => {
     const raw =
@@ -305,6 +307,10 @@ export default function Home() {
     }
     return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
   }, [profileName, user]);
+
+  useEffect(() => {
+    setAvatarImageFailed(false);
+  }, [profileAvatarUrl]);
 
   const activeCommandPlan = COMMAND_PROFILES[activeCommandProfile];
   const plannerEntryHref = user
@@ -522,10 +528,11 @@ export default function Home() {
                   }}
                   className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 ring-2 ring-teal-400/30 hover:ring-teal-400/60 transition"
                 >
-                  {profileAvatarUrl ? (
+                  {resolvedProfileAvatarUrl ? (
                     <img
-                      src={profileAvatarUrl}
+                      src={resolvedProfileAvatarUrl}
                       alt="Profile"
+                      onError={() => setAvatarImageFailed(true)}
                       className="h-10 w-10 rounded-full object-cover"
                     />
                   ) : (
@@ -546,8 +553,13 @@ export default function Home() {
                   >
                     <div className="flex items-center gap-3 pb-3 border-b border-white/10">
                       <div className="h-10 w-10 rounded-full border border-white/10 bg-white/5 overflow-hidden">
-                        {profileAvatarUrl ? (
-                          <img src={profileAvatarUrl} alt="Profile" className="h-full w-full object-cover" />
+                        {resolvedProfileAvatarUrl ? (
+                          <img
+                            src={resolvedProfileAvatarUrl}
+                            alt="Profile"
+                            onError={() => setAvatarImageFailed(true)}
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
                           <div className="h-full w-full flex items-center justify-center text-xs text-gray-300">
                             {profileInitials}
