@@ -4,30 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence, useReducedMotion, type Variants } from "framer-motion";
-import { Mail, Lock, Loader2, ArrowRight, Plane, Sparkles, ShieldCheck, Compass } from "lucide-react";
+import { Mail, Lock, Loader2, ArrowRight, Plane } from "lucide-react";
 import RahiBackground from "@/components/RahiBackground";
 
 const AUTH_NETWORK_ERROR_MESSAGE =
   "Cannot reach authentication server right now. Please check your network or try again shortly.";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const EXPERIENCE_POINTS = [
-  {
-    icon: ShieldCheck,
-    title: "Secure identity layer",
-    detail: "Supabase-backed auth with recovery and OAuth support.",
-  },
-  {
-    icon: Compass,
-    title: "Trip-first onboarding",
-    detail: "Get into planner mode fast with fewer friction steps.",
-  },
-  {
-    icon: Sparkles,
-    title: "Premium interactions",
-    detail: "High-fidelity motion tuned for a polished product feel.",
-  },
-];
-
 const normalizeAuthError = (input: unknown) => {
   const rawMessage =
     typeof input === "string"
@@ -334,7 +316,7 @@ export default function LoginPage() {
 
   return (
     <main
-      className="relative min-h-screen flex items-start justify-center overflow-hidden px-4 py-8 sm:px-6 lg:items-center lg:py-10"
+      className="relative min-h-screen flex items-center justify-center overflow-hidden px-4 py-10 sm:px-6"
       onMouseMove={(event) => {
         if (shouldReduceMotion) return;
         const width = window.innerWidth || 1;
@@ -362,70 +344,46 @@ export default function LoginPage() {
         className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_14%_12%,rgba(34,211,238,0.22),transparent_38%),radial-gradient(circle_at_82%_88%,rgba(20,184,166,0.18),transparent_42%)]"
       />
 
-      <div className="relative z-10 mx-auto w-full max-w-6xl">
-        <div className="grid overflow-hidden rounded-[30px] border border-white/15 bg-slate-950/55 shadow-[0_36px_80px_-42px_rgba(14,165,233,0.42)] backdrop-blur-2xl lg:grid-cols-[1.04fr_0.96fr]">
-          <section className="relative border-b border-white/10 p-6 sm:p-8 lg:border-b-0 lg:border-r lg:p-10">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_15%,rgba(34,211,238,0.2),transparent_37%),radial-gradient(circle_at_82%_80%,rgba(14,165,233,0.16),transparent_44%)]"
-            />
-            <div className="relative">
-              <div className="inline-flex items-center gap-2 rounded-full border border-cyan-300/35 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-100">
-                <Sparkles className="h-3.5 w-3.5" />
-                Premium Travel Experience
-              </div>
-              <h1 className="mt-5 text-4xl font-display font-bold leading-tight text-white sm:text-5xl">
-                Design your next trip
-                <span className="block bg-gradient-to-r from-cyan-200 via-teal-200 to-sky-200 bg-clip-text text-transparent">
-                  in one smooth flow.
-                </span>
-              </h1>
-              <p className="mt-4 max-w-xl text-sm leading-relaxed text-slate-300 sm:text-base">
-                Rahi.AI blends itinerary intelligence, budget guidance, and collaboration in one modern control surface.
-              </p>
+      <div className="relative z-10 mx-auto w-full max-w-4xl">
+        <motion.div
+          initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: -8 }}
+          animate={shouldReduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: premiumEase }}
+          className="mb-8 text-center"
+        >
+          <a
+            href="/"
+            className="inline-flex items-center gap-2 rounded-full border border-cyan-200/25 bg-slate-950/50 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100"
+          >
+            <img src="/brand/rahi-mark.svg" alt="Rahi.AI" className="h-4 w-4" />
+            Rahi.AI
+          </a>
+          <h1 className="mt-4 text-4xl font-display font-bold leading-tight text-white sm:text-5xl">
+            Your next journey starts here.
+          </h1>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base">
+            Secure access to itineraries, collaboration, and AI-powered planning in one premium experience.
+          </p>
+        </motion.div>
 
-              <div className="mt-6 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-cyan-400/25 to-sky-400/10 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-200/80">Trips planned</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">52k+</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-teal-400/25 to-emerald-400/10 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-200/80">Cities mapped</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">1,200+</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-400/25 to-blue-400/10 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-200/80">Group journeys</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">18k+</p>
-                </div>
-              </div>
-
-              <div className="mt-7 space-y-3">
-                {EXPERIENCE_POINTS.map((point) => {
-                  const Icon = point.icon;
-                  return (
-                    <div
-                      key={point.title}
-                      className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-cyan-300/25 bg-cyan-500/12 text-cyan-100">
-                          <Icon className="h-4 w-4" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-semibold text-white">{point.title}</p>
-                          <p className="mt-1 text-xs text-slate-300">{point.detail}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-
-          <section className="border-t border-white/10 p-6 sm:p-8 lg:border-l lg:border-t-0 lg:p-10">
-            <div className="mx-auto w-full max-w-md">
-        <AnimatePresence mode="wait">
+        <div className="relative mx-auto w-full max-w-[530px]">
+          {!shouldReduceMotion && (
+            <>
+              <motion.div
+                aria-hidden="true"
+                className="pointer-events-none absolute -left-12 top-6 h-24 w-24 rounded-3xl border border-cyan-200/20 bg-cyan-400/12 backdrop-blur-md"
+                animate={{ y: [0, -10, 0], rotate: [0, -4, 0], opacity: [0.35, 0.6, 0.35] }}
+                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              />
+              <motion.div
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-10 bottom-10 h-20 w-20 rounded-full border border-teal-200/20 bg-teal-300/12 backdrop-blur-md"
+                animate={{ y: [0, 8, 0], scale: [1, 1.08, 1], opacity: [0.3, 0.55, 0.3] }}
+                transition={{ duration: 5.6, repeat: Infinity, ease: "easeInOut" }}
+              />
+            </>
+          )}
+          <AnimatePresence mode="wait">
           {success ? (
             <motion.div
               key="success"
@@ -441,7 +399,7 @@ export default function LoginPage() {
               }
               exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -12, scale: 0.99 }}
               transition={{ duration: 0.55, ease: premiumEase }}
-              className="relative overflow-hidden rounded-[26px] border border-cyan-300/20 bg-[#07122a]/88 p-8 text-center shadow-[0_26px_60px_-34px_rgba(56,189,248,0.55)] backdrop-blur-2xl sm:p-10"
+              className="relative overflow-hidden rounded-[28px] border border-white/20 bg-slate-950/80 p-8 text-center shadow-[0_34px_80px_-46px_rgba(20,184,166,0.58)] backdrop-blur-2xl sm:p-10"
             >
               <motion.div
                 aria-hidden="true"
@@ -531,7 +489,7 @@ export default function LoginPage() {
               }
               exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -14, scale: 0.99 }}
               transition={{ duration: 0.6, ease: premiumEase }}
-              className="relative overflow-hidden rounded-[26px] border border-cyan-300/20 bg-[#07122a]/88 p-6 shadow-[0_26px_60px_-34px_rgba(56,189,248,0.55)] backdrop-blur-2xl sm:p-8"
+              className="relative overflow-hidden rounded-[28px] border border-white/20 bg-slate-950/80 p-6 shadow-[0_34px_90px_-54px_rgba(45,212,191,0.65)] backdrop-blur-2xl sm:p-8"
             >
               <motion.div
                 aria-hidden="true"
@@ -547,16 +505,10 @@ export default function LoginPage() {
               />
 
               <motion.div variants={containerVariants} initial="hidden" animate="visible">
-                <motion.div variants={itemVariants} className="mb-7">
-                  <div className="flex items-center justify-between gap-3">
-                    <a href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-white/90">
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 bg-white/5">
-                        <img src="/brand/rahi-mark.svg" alt="Rahi.AI" className="h-5 w-5" />
-                      </span>
-                      Rahi.AI
-                    </a>
-                    {!isRecoveryMode && (
-                      <div className="inline-flex rounded-full border border-white/15 bg-white/5 p-1 text-xs">
+                <motion.div variants={itemVariants} className="mb-7 text-center">
+                  {!isRecoveryMode && (
+                    <div className="mb-5 flex justify-center">
+                      <div className="inline-flex rounded-full border border-white/20 bg-white/[0.06] p-1 text-xs">
                         {(["login", "signup"] as const).map((value) => {
                           const active = mode === value;
                           return (
@@ -569,7 +521,7 @@ export default function LoginPage() {
                               }}
                               className={`rounded-full px-3 py-1.5 font-semibold transition ${
                                 active
-                                  ? "bg-gradient-to-r from-cyan-300 to-teal-300 text-slate-950"
+                                  ? "bg-gradient-to-r from-teal-300 via-cyan-300 to-sky-300 text-slate-950"
                                   : "text-slate-300 hover:text-white"
                               }`}
                             >
@@ -578,11 +530,11 @@ export default function LoginPage() {
                           );
                         })}
                       </div>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
-                  <p className="mt-5 mb-3 text-[10px] uppercase tracking-[0.22em] text-cyan-200/80">
-                    {isRecoveryMode ? "Password Recovery" : "Experience Access Portal"}
+                  <p className="mb-3 text-[10px] uppercase tracking-[0.22em] text-cyan-200/80">
+                    {isRecoveryMode ? "Password Recovery" : "Traveler Access"}
                   </p>
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.div
@@ -592,10 +544,10 @@ export default function LoginPage() {
                       exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -8 }}
                       transition={{ duration: 0.32, ease: premiumEase }}
                     >
-                      <h1 className="mb-2 text-3xl font-display font-bold tracking-tight text-white sm:text-4xl">
+                      <h1 className="mb-2 text-[34px] font-display font-bold tracking-tight text-white sm:text-[40px]">
                         {isRecoveryMode ? "Set a new password" : mode === "login" ? "Welcome back" : "Create your account"}
                       </h1>
-                      <p className="text-sm text-gray-300">{modeCopy.subtitle}</p>
+                      <p className="mx-auto max-w-sm text-sm text-gray-300">{modeCopy.subtitle}</p>
                     </motion.div>
                   </AnimatePresence>
                 </motion.div>
@@ -989,9 +941,7 @@ export default function LoginPage() {
               </motion.div>
             </motion.div>
           )}
-        </AnimatePresence>
-            </div>
-          </section>
+          </AnimatePresence>
         </div>
       </div>
     </main>
