@@ -2,8 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import Image from "next/image";
+import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { motion, Variants } from "framer-motion";
+import { motion, useReducedMotion, type Variants } from "framer-motion";
 import {
   Compass,
   Wallet,
@@ -161,13 +164,14 @@ const COMMAND_PROFILES: Record<CommandProfileId, CommandProfile> = {
 
 export default function Home() {
   const router = useRouter();
-  const [checkingAuth, setCheckingAuth] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const shouldReduceMotion = useReducedMotion();
+  const [user, setUser] = useState<User | null>(null);
   const [profileAvatar, setProfileAvatar] = useState<string | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [navCompact, setNavCompact] = useState(false);
   const avatarMenuRef = useRef<HTMLDivElement | null>(null);
+  const profileMenuFirstItemRef = useRef<HTMLAnchorElement | null>(null);
   const premiumEase = [0.16, 1, 0.3, 1] as const;
   const [voiceStatus, setVoiceStatus] = useState<"idle" | "listening" | "thinking" | "speaking">("idle");
   const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
@@ -182,36 +186,26 @@ export default function Home() {
     useState<CommandProfileId>("solo");
   const [commandCopied, setCommandCopied] = useState(false);
 
-  // --- AUTHENTICATION LOGIC (Untouched) ---
+  // --- AUTHENTICATION LOGIC ---
   useEffect(() => {
-    let mounted = true;
-    const checkSession = async () => {
-      const { data, error } = await supabase.auth.getSession();
-      if (!data.session) {
-        router.replace("/login");
-        return;
-      }
-      if (mounted) {
-        setUser(data.session.user);
-        setCheckingAuth(false);
-      }
+    let active = true;
+    const loadSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!active) return;
+      setUser(data.session?.user ?? null);
     };
-    checkSession();
+    void loadSession();
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        if (!session) {
-          router.replace("/login");
-          return;
-        }
-        setUser(session.user);
-        setCheckingAuth(false);
+        if (!active) return;
+        setUser(session?.user ?? null);
       }
     );
     return () => {
-      mounted = false;
+      active = false;
       listener.subscription.unsubscribe();
     };
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -224,7 +218,9 @@ export default function Home() {
         if (!active) return;
         setProfileAvatar(data?.avatar_url || null);
         setProfileName(data?.name || data?.email || null);
-      } catch {}
+      } catch (error) {
+        console.error("Failed to load profile:", error);
+      }
     };
     loadProfile();
     return () => {
@@ -251,9 +247,16 @@ export default function Home() {
         setAvatarMenuOpen(false);
       }
     };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAvatarMenuOpen(false);
+      }
+    };
     window.addEventListener("mousedown", handleClick);
+    window.addEventListener("keydown", handleEscape);
     return () => {
       window.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("keydown", handleEscape);
     };
   }, [avatarMenuOpen]);
 
@@ -268,7 +271,9 @@ export default function Home() {
           ...parsed,
           lang: parsed?.lang === "hi-IN" ? "hi-IN" : "en-IN",
         }));
-      } catch {}
+      } catch {
+        window.localStorage.removeItem("rahi-voice-settings");
+      }
     }
   }, []);
 
@@ -302,6 +307,9 @@ export default function Home() {
   }, [profileName, user]);
 
   const activeCommandPlan = COMMAND_PROFILES[activeCommandProfile];
+  const plannerEntryHref = user
+    ? "/planner?mode=ai"
+    : "/login?next=%2Fplanner%3Fmode%3Dai";
 
   const speakResponse = (text: string) => {
     if (!voiceSettings.tts) return;
@@ -338,13 +346,21 @@ export default function Home() {
     }
   };
 
+  const guardedPush = (url: string) => {
+    if (!user && url.startsWith("/planner")) {
+      router.push(`/login?next=${encodeURIComponent(url)}`);
+      return;
+    }
+    router.push(url);
+  };
+
   const handleVoiceCommand = (text: string) => {
     const lower = text.toLowerCase();
     setVoiceStatus("thinking");
 
     const go = (url: string, message: string) => {
       announce(message);
-      router.push(url);
+      guardedPush(url);
     };
 
     if (/logout|log out|sign out/.test(lower)) {
@@ -390,36 +406,35 @@ export default function Home() {
   };
 
   // --- ANIMATION VARIANTS (TS Fixed) ---
-  const containerVariants: Variants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.15, delayChildren: 0.1 },
-    },
-  };
+  const containerVariants: Variants = shouldReduceMotion
+    ? {
+        hidden: { opacity: 1 },
+        visible: { opacity: 1 },
+      }
+    : {
+        hidden: { opacity: 0 },
+        visible: {
+          opacity: 1,
+          transition: { staggerChildren: 0.15, delayChildren: 0.1 },
+        },
+      };
 
-  const itemVariants: Variants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: {
-      y: 0,
-      opacity: 1,
-      transition: {
-        duration: 0.7,
-        ease: premiumEase,
-      },
-    },
-  };
-
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-rahi-bg flex items-center justify-center text-teal-300 px-4 sm:px-6">
-        <div className="rahi-panel px-8 py-6 flex flex-col items-center gap-4">
-          <div className="h-8 w-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin" />
-          <p className="animate-pulse">Loading Rahi.AI...</p>
-        </div>
-      </div>
-    );
-  }
+  const itemVariants: Variants = shouldReduceMotion
+    ? {
+        hidden: { opacity: 1, y: 0 },
+        visible: { opacity: 1, y: 0 },
+      }
+    : {
+        hidden: { y: 20, opacity: 0 },
+        visible: {
+          y: 0,
+          opacity: 1,
+          transition: {
+            duration: 0.7,
+            ease: premiumEase,
+          },
+        },
+      };
 
   return (
     <main className="relative min-h-screen bg-black text-white overflow-hidden selection:bg-teal-500 selection:text-white">
@@ -438,15 +453,17 @@ export default function Home() {
           }`}
         >
           <motion.div
-            initial={{ opacity: 0, x: -20 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             className="rahi-logo"
           >
-            <a href="/" aria-label="Rahi.AI" className="inline-flex items-center gap-3">
+            <Link href="/" aria-label="Rahi.AI" className="inline-flex items-center gap-3">
               <span className="rahi-logo-badge h-11 w-11 rounded-2xl border border-white/10 bg-black/40">
-                <img
+                <Image
                   src="/brand/rahi-mark.svg"
                   alt="Rahi.AI mark"
+                  width={40}
+                  height={40}
                   className="h-10 w-10"
                 />
               </span>
@@ -458,11 +475,11 @@ export default function Home() {
               >
                 <text x="0" y="28">Rahi.AI</text>
               </svg>
-            </a>
+            </Link>
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={shouldReduceMotion ? false : { opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center gap-2 md:gap-6 text-sm font-medium text-gray-200"
           >
@@ -481,84 +498,109 @@ export default function Home() {
               </button>
             </div>
 
-            <a href="/planner" className="rahi-btn-secondary px-3 py-2 text-xs md:px-5 md:py-2.5 md:text-sm border-white/20">
+            <Link href={plannerEntryHref} className="rahi-btn-secondary px-3 py-2 text-xs md:px-5 md:py-2.5 md:text-sm border-white/20">
               <span className="md:hidden">Plan</span>
               <span className="hidden md:inline">Start Planning</span>
-            </a>
+            </Link>
 
-            <div className="relative" ref={avatarMenuRef}>
-              <button
-                type="button"
-                aria-label="Profile menu"
-                aria-haspopup="menu"
-                aria-expanded={avatarMenuOpen}
-                onClick={() => setAvatarMenuOpen((prev) => !prev)}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 ring-2 ring-teal-400/30 hover:ring-teal-400/60 transition"
-              >
-                {profileAvatarUrl ? (
-                  <img
-                    src={profileAvatarUrl}
-                    alt="Profile"
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <span className="text-[12px] font-semibold text-gray-200">
-                    {profileInitials}
-                  </span>
-                )}
-              </button>
-              {avatarMenuOpen && (
-                <motion.div
-                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ duration: 0.18, ease: "easeOut" }}
-                  className="absolute right-0 mt-3 w-64 rounded-2xl border border-white/10 bg-[#0b1220]/95 p-3 shadow-xl backdrop-blur"
+            {user ? (
+              <div className="relative" ref={avatarMenuRef}>
+                <button
+                  id="home-profile-menu-button"
+                  type="button"
+                  aria-label="Profile menu"
+                  aria-haspopup="menu"
+                  aria-controls="home-profile-menu"
+                  aria-expanded={avatarMenuOpen}
+                  onClick={() => setAvatarMenuOpen((prev) => !prev)}
+                  onKeyDown={(event) => {
+                    if (event.key === "ArrowDown" || event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setAvatarMenuOpen(true);
+                      window.setTimeout(() => profileMenuFirstItemRef.current?.focus(), 0);
+                    }
+                  }}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 ring-2 ring-teal-400/30 hover:ring-teal-400/60 transition"
                 >
-                  <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-                    <div className="h-10 w-10 rounded-full border border-white/10 bg-white/5 overflow-hidden">
-                      {profileAvatarUrl ? (
-                        <img src={profileAvatarUrl} alt="Profile" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="h-full w-full flex items-center justify-center text-xs text-gray-300">
-                          {profileInitials}
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-white">
-                        {profileName || user?.email || "Rahi Traveler"}
+                  {profileAvatarUrl ? (
+                    <img
+                      src={profileAvatarUrl}
+                      alt="Profile"
+                      className="h-10 w-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-[12px] font-semibold text-gray-200">
+                      {profileInitials}
+                    </span>
+                  )}
+                </button>
+                {avatarMenuOpen && (
+                  <motion.div
+                    id="home-profile-menu"
+                    role="menu"
+                    aria-labelledby="home-profile-menu-button"
+                    initial={shouldReduceMotion ? false : { opacity: 0, y: -6, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.18, ease: "easeOut" }}
+                    className="absolute right-0 mt-3 w-64 rounded-2xl border border-white/10 bg-[#0b1220]/95 p-3 shadow-xl backdrop-blur"
+                  >
+                    <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+                      <div className="h-10 w-10 rounded-full border border-white/10 bg-white/5 overflow-hidden">
+                        {profileAvatarUrl ? (
+                          <img src={profileAvatarUrl} alt="Profile" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="h-full w-full flex items-center justify-center text-xs text-gray-300">
+                            {profileInitials}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-[11px] text-gray-400">Account</div>
+                      <div>
+                        <div className="text-sm font-semibold text-white">
+                          {profileName || user.email || "Rahi Traveler"}
+                        </div>
+                        <div className="text-[11px] text-gray-400">Account</div>
+                      </div>
                     </div>
-                  </div>
-                  <div className="py-3 space-y-1">
-                    <a
-                      href="/profile"
-                      className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/5"
-                    >
-                      Profile
-                      <ArrowRight className="h-4 w-4 text-gray-500" />
-                    </a>
-                    <button
-                      type="button"
-                      onClick={logout}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-rose-200 hover:bg-white/5"
-                    >
-                      Logout
-                      <ArrowRight className="h-4 w-4 text-rose-200/70" />
-                    </button>
-                  </div>
-                  <div className="border-t border-white/10 pt-3">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-gray-500">
-                      Appearance
+                    <div className="py-3 space-y-1">
+                      <Link
+                        ref={profileMenuFirstItemRef}
+                        role="menuitem"
+                        href="/profile"
+                        onClick={() => setAvatarMenuOpen(false)}
+                        className="flex items-center justify-between rounded-lg px-3 py-2 text-sm text-gray-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-400/60"
+                      >
+                        Profile
+                        <ArrowRight className="h-4 w-4 text-gray-500" />
+                      </Link>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={logout}
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm text-rose-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-400/60"
+                      >
+                        Logout
+                        <ArrowRight className="h-4 w-4 text-rose-200/70" />
+                      </button>
                     </div>
-                    <div className="mt-2 origin-left scale-90">
-                      <ThemeToggle />
+                    <div className="border-t border-white/10 pt-3">
+                      <div className="text-[10px] uppercase tracking-[0.2em] text-gray-500">
+                        Appearance
+                      </div>
+                      <div className="mt-2 origin-left scale-90">
+                        <ThemeToggle />
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              )}
-            </div>
+                  </motion.div>
+                )}
+              </div>
+            ) : (
+              <Link
+                href="/login"
+                className="inline-flex h-11 items-center rounded-full border border-cyan-300/35 bg-cyan-500/10 px-4 text-sm font-semibold text-cyan-100 transition hover:border-cyan-200/55 hover:text-white"
+              >
+                Sign in
+              </Link>
+            )}
           </motion.div>
         </div>
       </nav>
@@ -607,13 +649,13 @@ export default function Home() {
             >
               <button
                 className="rahi-btn-primary px-6 py-3 text-sm"
-                onClick={() => router.push("/planner?mode=ai")}
+                onClick={() => guardedPush("/planner?mode=ai")}
               >
                 Start Planning <ArrowRight className="h-4 w-4" />
               </button>
               <button
                 className="rahi-btn-secondary group px-6 py-3 text-sm"
-                onClick={() => router.push("/planner?mode=ai&sample=1")}
+                onClick={() => guardedPush("/planner?mode=ai&sample=1")}
               >
                 See Sample Trip
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
@@ -653,13 +695,19 @@ export default function Home() {
                   stable
                 </span>
               </div>
-              <div className="aspect-[16/10]">
-                <img
-                  src="/brand/Gemini_Generated_Image_pzz4qupzz4qupzz4.png"
-                  alt="Rahi.AI neon brand art"
-                  className="h-full w-full object-cover brightness-[0.86]"
-                  loading="eager"
-                />
+              <div className="relative aspect-[16/10] overflow-hidden">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_24%,rgba(45,212,191,0.4),transparent_42%),radial-gradient(circle_at_80%_75%,rgba(56,189,248,0.32),transparent_44%),linear-gradient(160deg,rgba(15,23,42,0.95),rgba(2,6,23,0.96))]" />
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:34px_34px] opacity-45" />
+                <div className="relative z-[1] flex h-full items-end p-5 sm:p-6">
+                  <div className="w-full rounded-2xl border border-cyan-300/25 bg-black/45 p-4 backdrop-blur">
+                    <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-200/85">
+                      Mission Snapshot
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-white">
+                      {activeCommandPlan.destination} route with budget guardrails and fallback checkpoints.
+                    </p>
+                  </div>
+                </div>
               </div>
               <div className="absolute bottom-4 left-4 right-4 z-10 grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="rounded-xl border border-white/10 bg-black/55 px-2.5 py-2 backdrop-blur">
@@ -701,9 +749,13 @@ export default function Home() {
 
         {/* Scroll Indicator */}
         <motion.div 
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1, y: [0, 10, 0] }}
-          transition={{ delay: 2, duration: 2, repeat: Infinity, ease: "easeInOut" }}
+          initial={shouldReduceMotion ? false : { opacity: 0 }}
+          animate={shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 1, y: [0, 10, 0] }}
+          transition={
+            shouldReduceMotion
+              ? { duration: 0.2 }
+              : { delay: 2, duration: 2, repeat: Infinity, ease: "easeInOut" }
+          }
           className="absolute bottom-10 left-1/2 hidden -translate-x-1/2 sm:block"
         >
           <div className="flex flex-col items-center gap-2 text-gray-400 text-sm">
@@ -731,19 +783,19 @@ export default function Home() {
             <div className="flex flex-wrap gap-3">
               <button
                 className="rahi-btn-primary px-5 py-3 text-sm"
-                onClick={() => router.push("/planner?mode=ai")}
+                onClick={() => guardedPush("/planner?mode=ai")}
               >
                 Start Planning <ArrowRight className="h-4 w-4" />
               </button>
               <button
                 className="rahi-btn-secondary"
-                onClick={() => router.push("/planner?mode=budget")}
+                onClick={() => guardedPush("/planner?mode=budget")}
               >
                 Budget Guardian
               </button>
               <button
                 className="rahi-btn-secondary"
-                onClick={() => router.push("/planner?mode=chat")}
+                onClick={() => guardedPush("/planner?mode=chat")}
               >
                 AI Travel Buddy
               </button>
@@ -887,7 +939,7 @@ export default function Home() {
             </div>
             <button
               className="rahi-btn-secondary text-xs"
-              onClick={() => router.push(activeCommandPlan.launchHref)}
+              onClick={() => guardedPush(activeCommandPlan.launchHref)}
             >
               Launch {activeCommandPlan.title}
               <ArrowRight className="h-4 w-4" />
@@ -932,7 +984,7 @@ export default function Home() {
                     <button
                       type="button"
                       className="rahi-btn-primary text-sm"
-                      onClick={() => router.push(activeCommandPlan.launchHref)}
+                      onClick={() => guardedPush(activeCommandPlan.launchHref)}
                     >
                       Run Mission
                       <ArrowRight className="h-4 w-4" />
@@ -988,9 +1040,13 @@ export default function Home() {
                       <div className="h-2 rounded-full bg-slate-900/90 ring-1 ring-white/10">
                         <motion.div
                           key={`${activeCommandProfile}-${lane.label}-bar`}
-                          initial={{ width: 0 }}
+                          initial={shouldReduceMotion ? false : { width: 0 }}
                           animate={{ width: `${lane.value}%` }}
-                          transition={{ duration: 0.7, ease: premiumEase }}
+                          transition={
+                            shouldReduceMotion
+                              ? { duration: 0.1 }
+                              : { duration: 0.7, ease: premiumEase }
+                          }
                           className="h-full rounded-full"
                           style={{ background: lane.gradient }}
                         />
@@ -1037,7 +1093,8 @@ export default function Home() {
             eyebrow="Neural Route Engine"
             signal="Drafts first plan in under a minute"
             actionLabel="Open Planner"
-            onClick={() => router.push('/planner?mode=ai')}
+            onClick={() => guardedPush("/planner?mode=ai")}
+            reducedMotion={!!shouldReduceMotion}
             color="hover:border-teal-500/50"
           />
           <FeatureCard 
@@ -1047,7 +1104,8 @@ export default function Home() {
             eyebrow="Spend Intelligence"
             signal="Flags budget drift before it compounds"
             actionLabel="Open Budget"
-            onClick={() => router.push('/planner?mode=budget')}
+            onClick={() => guardedPush("/planner?mode=budget")}
+            reducedMotion={!!shouldReduceMotion}
             color="hover:border-teal-500/50"
           />
           <FeatureCard 
@@ -1057,7 +1115,8 @@ export default function Home() {
             eyebrow="Context Memory"
             signal="Remembers your vibe, pace, and constraints"
             actionLabel="Open Chat"
-            onClick={() => router.push('/planner?mode=chat')}
+            onClick={() => guardedPush("/planner?mode=chat")}
+            reducedMotion={!!shouldReduceMotion}
             color="hover:border-teal-500/50"
           />
         </div>
@@ -1071,7 +1130,7 @@ export default function Home() {
           {["Plan", "Generate", "Travel", "Save"].map((step, i) => (
             <motion.div 
               key={i}
-              whileHover={{ y: -5 }}
+              whileHover={shouldReduceMotion ? undefined : { y: -5 }}
             className="rahi-card cursor-default rounded-2xl p-6 text-center transition-all hover:bg-white/10 sm:p-8"
           >
               <span className="block text-4xl font-bold text-teal-500/80 mb-2">{i + 1}</span>
@@ -1114,9 +1173,9 @@ export default function Home() {
           ].map((item, i) => (
             <motion.button
               key={i}
-              onClick={() => router.push(`/planner?type=${item.v}`)}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              onClick={() => guardedPush(`/planner?type=${item.v}`)}
+              whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
+              whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
               className="group flex flex-col items-center justify-center gap-3 rounded-2xl p-6 transition-all hover:border-teal-500/50 hover:bg-teal-500/20 rahi-card sm:p-8"
             >
               <span className="text-lg font-semibold text-gray-200 group-hover:text-white">{item.t}</span>
@@ -1137,7 +1196,7 @@ export default function Home() {
           ].map((q, i) => (
             <motion.div
               key={i}
-              whileHover={{ y: -5 }}
+              whileHover={shouldReduceMotion ? undefined : { y: -5 }}
               className="rahi-card p-8 rounded-2xl backdrop-blur-sm"
             >
               <div className="flex gap-1 mb-4 text-teal-400">
@@ -1156,7 +1215,7 @@ export default function Home() {
       {/* 10. BOTTOM CTA (Requested) */}
       <section className="relative z-20 px-4 py-16 text-center sm:px-6 sm:py-24">
         <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
+          initial={shouldReduceMotion ? false : { opacity: 0, scale: 0.9 }}
           whileInView={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5 }}
           className="mx-auto max-w-3xl rounded-3xl rahi-panel p-6 sm:p-10 md:p-12"
@@ -1168,12 +1227,12 @@ export default function Home() {
                 Your next adventure is just a click away. Let AI handle the details.
             </p>
             
-            <a 
-              href="/planner"
+            <Link
+              href={plannerEntryHref}
               className="rahi-btn-primary px-8 py-3 text-base sm:px-10 sm:py-4 sm:text-lg"
             >
                Start Planning Now <ArrowRight className="h-5 w-5" />
-            </a>
+            </Link>
         </motion.div>
       </section>
 
@@ -1214,6 +1273,7 @@ type FeatureCardProps = {
   eyebrow?: string;
   signal?: string;
   actionLabel?: string;
+  reducedMotion?: boolean;
 };
 
 function FeatureCard({
@@ -1225,11 +1285,12 @@ function FeatureCard({
   eyebrow,
   signal,
   actionLabel,
+  reducedMotion = false,
 }: FeatureCardProps) {
   return (
     <motion.div 
       onClick={onClick}
-      whileHover={{ y: -10 }}
+      whileHover={reducedMotion ? undefined : { y: -10 }}
       className={`group relative cursor-pointer rounded-3xl p-6 rahi-card backdrop-blur-sm transition-all duration-300 hover:bg-white/10 sm:p-8 ${color}`}
     >
       {eyebrow && (
