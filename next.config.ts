@@ -13,4 +13,6 @@ const sentryOptions = {
   hideSourceMaps: true,
 };
 
-export default withSentryConfig(nextConfig, sentryOptions);
+const sentryBuildPluginEnabled = process.env.SENTRY_ENABLE_BUILD_PLUGIN === "1";
+
+export default sentryBuildPluginEnabled ? withSentryConfig(nextConfig, sentryOptions) : nextConfig;
