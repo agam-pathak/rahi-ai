@@ -696,7 +696,15 @@ export default function Home() {
                 </span>
               </div>
               <div className="relative aspect-[16/10] overflow-hidden">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_24%,rgba(45,212,191,0.4),transparent_42%),radial-gradient(circle_at_80%_75%,rgba(56,189,248,0.32),transparent_44%),linear-gradient(160deg,rgba(15,23,42,0.95),rgba(2,6,23,0.96))]" />
+                <Image
+                  src="/brand/Gemini_Generated_Image_pzz4qupzz4qupzz4.png"
+                  alt="Rahi.AI mission visualization"
+                  fill
+                  priority
+                  sizes="(max-width: 1024px) 92vw, 560px"
+                  className="object-cover brightness-[0.84] saturate-[0.9]"
+                />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_22%,rgba(45,212,191,0.28),transparent_40%),linear-gradient(160deg,rgba(5,10,26,0.14),rgba(3,8,20,0.68))]" />
                 <div className="absolute inset-0 bg-[linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:34px_34px] opacity-45" />
                 <div className="relative z-[1] flex h-full items-end p-5 sm:p-6">
                   <div className="w-full rounded-2xl border border-cyan-300/25 bg-black/45 p-4 backdrop-blur">
