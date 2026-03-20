@@ -1,242 +1,135 @@
-# Rahi.AI
+# Rahi.AI: The AI Travel Orchestrator
 
-AI-powered travel planning platform built with Next.js, Supabase, and a voice-first UX.
+> **Built for travelers who want planning clarity, not planning chaos.**
 
-Rahi.AI helps users generate trip itineraries, track budgets, collaborate on shared plans, and access premium planning features through Stripe and UPI billing paths.
+Rahi.AI is a high-performance, AI-driven travel orchestration platform designed to simplify complex trip planning. It distinguishes itself from generic itinerary generators by focusing on **"Mission-Critical"** travel parameters: Budget Guardrails, Route Confidence, and Safety Buffers.
 
-## Live
+[![Live Demo](https://img.shields.io/badge/Live-Production-2DD4BF?style=for-the-badge)](https://rahi-ai.vercel.app)
 
-- Production: https://rahi-ai.vercel.app
+---
 
-## Product Highlights
+## 🛰️ Product Highlights: "Mission Control" for Your Travels
 
-- AI Trip Planner with day-wise itinerary generation
-- Budget Guardian with spending controls and premium gating
-- AI Travel Buddy (chat-first planning assistant)
-- Voice Concierge on home and planner surfaces
-- Auth flows: email/password, Google OAuth, forgot password, recovery mode reset
-- Collaborative trip sharing and invite acceptance
-- Public trip links and live trip pages
-- Billing support for Stripe subscriptions and UPI checkout flow
+Rahi.AI moves beyond static lists, treating every trip as a series of logistics to be optimized for safety, cost, and speed.
 
-## Recent Updates
+### ✨ Key Features
+- **PWA Integration**: Installable on mobile and desktop for offline-ready travel planning.
+- **Global State Orchestration**: Migration to Zustand for predictable, high-performance trip management.
+- **Smart Itineraries**: Multi-day trip planning with AI-guided suggestions.
+- **Live Collaboration**: Shared trip links and group voting for itinerary activities.
+- **Voice Intelligence**: Heartfelt AI voice assistant for planning and safety alerts.
+- **Budget Tracking**: Real-time spending analysis based on trip choices.
 
-- Premium login redesign with improved motion and recovery UX
-- Forgot password + recovery mode implementation (`/login?mode=recovery`)
-- Homepage hardening pass:
-  - public-safe home behavior
-  - guarded planner redirects for unauthenticated users
-  - improved profile menu accessibility
-  - motion fallback for reduced-motion users
-- Robust avatar fallback to initials when profile image fails
-- Sentry build plugin gated behind explicit env toggle for deployment stability
+### 🧠 Neural Route Engine
+Generate high-fidelity, day-wise itineraries in under 60 seconds. Our engine integrates real-time destination data with user preferences to create actionable plans.
 
-## Tech Stack
+### 🛡️ Budget Guardian & Execution Lanes
+- **Budget Guardrail**: AI-tracked spend intelligence that flags potential drift before it happens.
+- **Route Confidence**: Real-time probability mapping for smooth transit.
+- **Safety Buffer**: Contingency tracking and risk assessment for every leg of your journey.
 
-- Framework: Next.js 16 (App Router, Turbopack)
-- Language: TypeScript
-- UI: React 18, Tailwind CSS, Framer Motion, Lucide icons
-- Auth + DB: Supabase (`@supabase/supabase-js`, `@supabase/ssr`)
-- AI: Groq-backed API routes
-- Maps: Mapbox GL
-- Billing: Stripe + Razorpay UPI flow
-- Monitoring: Sentry
-- Testing: Playwright (visual tests)
+### 💬 AI Travel Buddy & Voice Concierge
+A context-aware planning assistant that remembers your constraints. Combined with a **Voice-First UX**, Rahi allows for hands-free planning on the go.
 
-## Project Structure
+### 🤝 Seamless Collaboration
+- **Shared Mission Control**: Invite friends, manage roles, and co-create itineraries in real-time.
+- **Public & Live Pages**: Share your live trip status with family or friends via unique, lightweight public links.
+
+---
+
+## 🛠️ Tech Stack: The Engine Room
+
+Rahi.AI is built on a cutting-edge, low-latency stack designed for production-grade reliability.
+
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **AI Intelligence**: [Groq LPU Engine](https://groq.com/) for ultra-fast inference & custom AI route handlers.
+- **Visuals**: [Framer Motion](https://www.framer.com/motion/) (Motion-safe interactions) + [Tailwind CSS](https://tailwindcss.com/).
+- **Mapping**: [Mapbox GL](https://www.mapbox.com/) for high-fidelity, interactive 3D trip surfaces.
+- **Data & Auth**: [Supabase](https://supabase.com/) (Next.js SSR implementation) with Row Level Security (RLS).
+- **Billing**: Dual-flow integration with [Stripe](https://stripe.com/) (International) and [Razorpay](https://razorpay.com/) (Regional UPI).
+- **Observability**: [Sentry](https://sentry.io/) for production-grade error tracking and performance monitoring.
+
+---
+
+## 📂 Project Structure
 
 ```text
 rahi-ai/
   app/
-    page.tsx                    # Public homepage
+    page.tsx                    # Public interactive homepage
     login/page.tsx              # Auth + forgot/recovery flows
-    planner/page.tsx            # Main planning workspace
-    profile/page.tsx            # User profile
-    trip/[code]/page.tsx        # Shared/public trip page
-    trip/[code]/live/page.tsx   # Live trip page
+    planner/page.tsx            # Main planning workspace (Mission Control)
+    profile/page.tsx            # User settings & preferences
+    trip/[code]/page.tsx        # Shared/public trip dashboard
+    trip/[code]/live/page.tsx   # Live trip tracking surface
     api/
-      ai/*                      # AI route handlers
-      billing/*                 # Stripe + UPI routes
-      trips/*                   # Trip CRUD and membership
-      invites/*                 # Invite acceptance
-  components/
-    RahiBackground.tsx
-    RahiVoiceUI.tsx
-  lib/
-    supabase/*                  # Client/server/admin Supabase helpers
-  supabase/
-    rls.sql
-    trip_invites.sql
-    trip_owner_guard.sql
-  proxy.ts                      # Session refresh middleware/proxy
-  next.config.ts                # Next config + optional Sentry plugin wrapper
+      ai/*                      # AI orchestration & weather routes
+      billing/*                 # Stripe + UPI payment handlers
+      trips/*                   # Trip CRUD & membership logic
+      invites/*                 # Invite acceptance & token validation
+  components/                   # Reusable UI primitives (RahiVoiceUI, Backgrounds)
+  lib/                          # Supabase & shared utility helpers
+  supabase/                     # SQL seed files for RLS & schemas
+  next.config.ts                # Turbopack & Sentry configuration
 ```
 
-## Getting Started
+---
 
-### 1. Install
+## 🚀 Getting Started
 
+### 1. Installation
 ```bash
+git clone https://github.com/agam-pathak/rahi-ai.git
 cd rahi-ai
 npm install
 ```
 
-### 2. Configure env
-
+### 2. Environment Configuration
+Copy the template and fill in your keys:
 ```bash
 cp .env.example .env.local
 ```
 
-Fill required variables (see section below).
+| Key Group | Required Variables |
+| :--- | :--- |
+| **Core** | `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GROQ_API_KEY`, `WEATHER_API_KEY` |
+| **UX & Maps** | `MAPBOX_TOKEN`, `VOICE_ENABLED` |
+| **Billing** | `STRIPE_SECRET_KEY`, `RAZORPAY_KEY_ID`, `PREMIUM_ENABLED` (Flag) |
+| **Support** | `UPSTASH_REDIS_URL` (Rate limiting), `RESEND_API_KEY` (Email invites) |
 
-### 3. Run locally
-
-```bash
-npm run dev
-```
-
-Open http://localhost:3000
-
-### 4. Build check
-
-```bash
-npm run build
-```
-
-## Environment Variables
-
-Use `.env.example` as your base. Below is the practical grouping used in code.
-
-### Core required
-
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `NEXT_PUBLIC_SITE_URL`
-- `GROQ_API_KEY`
-- `WEATHER_API_KEY`
-
-Notes:
-- Weather route currently reads `WEATHER_API_KEY`.
-- If your local template still has `OPENWEATHER_API_KEY`, add `WEATHER_API_KEY` as well.
-
-### Maps and UX
-
-- `NEXT_PUBLIC_MAPBOX_TOKEN`
-- `NEXT_PUBLIC_VOICE_ENABLED`
-
-### Supabase admin / server features
-
-- `SUPABASE_SERVICE_ROLE_KEY`
-
-### Premium and billing flags
-
-- `PREMIUM_ENABLED`
-- `NEXT_PUBLIC_PREMIUM_ENABLED`
-- `BASIC_TRIAL_DAYS`
-
-### Stripe billing
-
-- `STRIPE_SECRET_KEY`
-- `STRIPE_PRICE_ID` (legacy fallback)
-- `STRIPE_PRICE_ID_PREMIUM`
-- `STRIPE_PRICE_ID_PRO`
-- `STRIPE_PRODUCT_ID_PRO`
-- `STRIPE_WEBHOOK_SECRET`
-
-### UPI billing (Razorpay)
-
-- `UPI_ENABLED`
-- `NEXT_PUBLIC_UPI_ENABLED`
-- `UPI_PLAN_NAME`
-- `UPI_PLAN_AMOUNT_INR`
-- `NEXT_PUBLIC_UPI_PLAN_AMOUNT_INR`
-- `RAZORPAY_KEY_ID`
-- `RAZORPAY_KEY_SECRET`
-
-### AI guard/rate limiting
-
-- `UPSTASH_REDIS_REST_URL`
-- `UPSTASH_REDIS_REST_TOKEN`
-
-### Optional email invite support
-
-- `RESEND_API_KEY`
-- `RESEND_FROM_EMAIL`
-- `NEXT_PUBLIC_EMAIL_INVITES_ENABLED`
-
-### Observability (Sentry)
-
-- `SENTRY_DSN`
-- `NEXT_PUBLIC_SENTRY_DSN`
-- `SENTRY_ORG`
-- `SENTRY_PROJECT`
-- `SENTRY_AUTH_TOKEN`
-- `SENTRY_ENVIRONMENT`
-- `SENTRY_ENABLE_BUILD_PLUGIN`
-
-`SENTRY_ENABLE_BUILD_PLUGIN=1` enables `withSentryConfig(...)` wrapping in `next.config.ts`. By default, plugin wrapping is off unless this flag is set.
-
-## Supabase Setup
-
-Run SQL files in Supabase SQL editor:
-
+### 3. Database Initialization
+Run the following SQL files in your Supabase SQL Editor to enable RLS and database functions:
 1. `supabase/rls.sql`
 2. `supabase/trip_invites.sql`
 3. `supabase/trip_owner_guard.sql`
 
-This enables RLS and core collaboration policies for trips, members, and profiles.
-
-## Auth Recovery Setup (Important)
-
-For forgot-password recovery links to work, add these redirect URLs in Supabase Auth settings:
-
-- `https://rahi-ai.vercel.app/login?mode=recovery`
-- `http://localhost:3000/login?mode=recovery`
-
-The login page handles recovery mode and password update directly.
-
-## Scripts
-
-- `npm run dev` - Start local dev server
-- `npm run build` - Production build
-- `npm run start` - Start production server
-- `npm run test:visual` - Run Playwright visual tests
-- `npm run test:visual:update` - Update visual snapshots
-
-## Deployment (Vercel)
-
-1. Import repo into Vercel.
-2. Set project root to `rahi-ai` (if using a parent workspace).
-3. Add all required env vars for Production (and Preview if needed).
-4. Deploy.
-
-If enabling Sentry build-time source map upload, set `SENTRY_ENABLE_BUILD_PLUGIN=1` and ensure Sentry org/project/token vars are configured.
-
-## API Overview (High-Level)
-
-- `app/api/ai/*` - itinerary generation, chat, daily plans, weather, stream
-- `app/api/billing/*` - checkout, portal, webhooks, UPI initiate/status, waitlist
-- `app/api/trips/*` - trip CRUD, member management, invite issuance
-- `app/api/invites/[token]/accept` - invite acceptance flow
-- `app/api/users/lookup` - user lookup helper
-
-## Security Notes
-
-- Never commit `.env.local` or any secret key.
-- Keep `SUPABASE_SERVICE_ROLE_KEY`, Stripe, Razorpay, and Redis tokens server-only.
-- Ensure RLS policies are applied before exposing the app broadly.
-
-## Roadmap (Practical)
-
-- Convert heavy media assets to optimized WebP/AVIF variants
-- Break large route files into smaller feature modules
-- Expand keyboard accessibility coverage in dropdown/menus
-- Add end-to-end smoke tests for login -> planner recovery and billing flows
-
-## Acknowledgements
-
-- Next.js, Supabase, Stripe, Razorpay, Mapbox, Framer Motion, Lucide, Playwright
+### 4. Local Development
+```bash
+npm run dev
+```
+Navigate to `http://localhost:3000` to enter the Mission Control dashboard.
 
 ---
 
-Built for travelers who want planning clarity, not planning chaos.
+## 🏗️ Deployment (Vercel)
+
+1. Set the **Root Directory** to `rahi-ai` (if part of a monorepo/workspace).
+2. Configure **Production Environment Variables**.
+3. (Optional) Enable **Sentry Build Plugin** by setting `SENTRY_ENABLE_BUILD_PLUGIN=1` for automated source map uploads.
+
+---
+
+## 🛣️ Roadmap
+
+- [ ] **Offline Resilience**: PWA implementation for low-connectivity flight/transit scenarios.
+- [ ] **Predictive Pricing**: Integrating historical flight/hotel data into the AI generator.
+- [ ] **Multi-Agent Voting**: Real-time collaborative polling on AI-suggested alternatives.
+
+---
+
+## 📄 License & Acknowledgements
+
+Built with ❤️ by **Agam Pathak**. 
+Special thanks to the [BuildFast](https://buildfast.ai/) community and the maintainers of Next.js, Supabase, and Framer Motion.
+

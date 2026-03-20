@@ -29,10 +29,11 @@ export const metadata: Metadata = {
     canonical: "/",
   },
 
+  manifest: "/manifest.json",
   icons: {
-    icon: "/icons/favicon.ico",
-    shortcut: "/icons/favicon.ico",
-    apple: "/icons/apple-icon.png",
+    icon: "/brand/rahi-mark.svg",
+    shortcut: "/brand/rahi-mark.svg",
+    apple: "/brand/rahi-mark.svg",
   },
 
   openGraph: {
