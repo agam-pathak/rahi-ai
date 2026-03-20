@@ -61,7 +61,7 @@ export const useTripStore = create<TripState>((set) => ({
   toggleSectionCompletion: (id) =>
     set((state) => ({
       sections: state.sections.map((s) =>
-        s.id === id ? { ...s, ...isCompleted: !s.isCompleted } : s
+        s.id === id ? { ...s, isCompleted: !s.isCompleted } : s
       ),
     })),
 
