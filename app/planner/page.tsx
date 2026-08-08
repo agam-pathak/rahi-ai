@@ -217,26 +217,22 @@ export default function PlannerPage() {
   const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "";
   const searchParams = useSyncedSearchParams();
 
-  // --- STATE ---
   const [loading, setLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
 
-  // Planner Output State
   const [trip, setTrip] = useState<Trip | null>(null);
   const [streaming, setStreaming] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
 
-  // Planner Input State
   const [destination, setDestination] = useState("");
   const [budget, setBudget] = useState("");
-  const [durationInput, setDurationInput] = useState(""); // Renamed from 'days' to avoid conflict
+  const [durationInput, setDurationInput] = useState("");
   const [interests, setInterests] = useState("");
   const [activeTemplateId, setActiveTemplateId] = useState<string | null>(null);
   const [showAllTemplates, setShowAllTemplates] = useState(false);
   const [focusView, setFocusView] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Group Coordination
   const [groupMembers, setGroupMembers] = useState<string[]>([]);
   const [groupMemberInput, setGroupMemberInput] = useState("");
   const [groupPolls, setGroupPolls] = useState<GroupPoll[]>([]);
@@ -246,14 +242,12 @@ export default function PlannerPage() {
   const [decisionInput, setDecisionInput] = useState("");
   const [groupLoaded, setGroupLoaded] = useState(false);
 
-  // History & Context
   const [history, setHistory] = useState<SavedTrip[]>([]);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [weather, setWeather] = useState<WeatherItem[]>([]);
   const [weatherLoading, setWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState<string | null>(null);
 
-  // Chat State
   const [chatMessages, setChatMessages] = useState<string[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [typing, setTyping] = useState(false);
@@ -931,7 +925,6 @@ export default function PlannerPage() {
     }
   };
 
-  // --- CONFIG ---
   const mode = searchParams.get("mode");
   const type = searchParams.get("type");
 
@@ -1045,8 +1038,6 @@ export default function PlannerPage() {
   const pdfDebug = searchParams.get("pdfdebug") === "1";
   const premiumEase = [0.16, 1, 0.3, 1] as const;
 
-  // --- EFFECTS ---
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const pendingPaymentId = window.localStorage.getItem(upiStorageKey);
@@ -1067,7 +1058,6 @@ export default function PlannerPage() {
     void checkUpiStatus(upiPaymentId);
   }, [searchParams, upiEnabled, upiPaymentId]);
 
-  // 🔐 AUTH GUARD
   useEffect(() => {
     if (e2eBypassAuth) {
       setCheckingAuth(false);
@@ -1081,7 +1071,6 @@ export default function PlannerPage() {
     checkSession();
   }, [router, e2eBypassAuth]);
 
-  // Scroll chat to bottom
   useEffect(() => {
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     bottomRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth" });
@@ -2120,7 +2109,6 @@ export default function PlannerPage() {
     }, 1200);
   }, [trip, streaming, persistTripResult, serializeTripForSync]);
 
-  // --- CORE GENERATION LOGIC ---
   const generatePlan = async (overrides?: GeneratePlanOverrides) => {
     setStreamError(null);
     const destinationValue = (overrides?.destination ?? destination).trim();
@@ -2151,7 +2139,6 @@ export default function PlannerPage() {
     setFormError(null);
     setStreamError(null);
     const currentChatThread = normalizeChatThread(chatMessagesRef.current);
-    // Initialize empty trip structure
     setTrip({
       destination: destinationValue,
       days: [],
@@ -2189,7 +2176,6 @@ export default function PlannerPage() {
       const decoder = new TextDecoder();
       let chunkBuffer = "";
 
-      // Local variables to accumulate data (needed because setState is async)
       let accumulatedDays: DayPlan[] = [];
       let accumulatedMeta = {
         total_estimated_budget: 0,
@@ -4005,7 +3991,6 @@ export default function PlannerPage() {
       <a href="#planner-main-content" className="rahi-skip-link">
         Skip to planner content
       </a>
-      {/* 1. GLOBAL ANIMATED BACKGROUND */}
       <RahiBackground />
 
       {checkingAuth ? (
@@ -4064,7 +4049,6 @@ export default function PlannerPage() {
           </div>
         )}
 
-        {/* HEADER */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -4252,10 +4236,7 @@ export default function PlannerPage() {
             bottomRef={bottomRef}
           />
         ) : (
-          /* ---------------- PLANNER / BUDGET MODE UI ---------------- */
           <div className={`rahi-planner-grid grid gap-6 md:gap-8 ${focusView ? "lg:grid-cols-1 is-focus" : "lg:grid-cols-12"}`}>
-            
-            {/* LEFT COLUMN: INPUT FORM */}
             <motion.div 
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
@@ -4500,7 +4481,6 @@ export default function PlannerPage() {
                 </div>
               </div>
 
-              {/* HISTORY SECTION */}
               {history.length > 0 && (
                 <div className="mt-8 pt-6 border-t border-white/10">
                   <div className="flex items-center gap-2 mb-4 text-gray-400">
@@ -4547,7 +4527,6 @@ export default function PlannerPage() {
               )}
             </motion.div>
 
-            {/* RIGHT COLUMN: OUTPUT */}
             <motion.div 
                initial={{ opacity: 0, x: 20 }}
                animate={{ opacity: 1, x: 0 }}
@@ -5778,7 +5757,6 @@ export default function PlannerPage() {
         )}
       </div>
 
-      {/* PDF EXPORT TEMPLATE */}
       <div
         className={`pdf-export ${pdfIsPremium ? "pdf-premium" : "pdf-free"} ${pdfDebug ? "pdf-debug" : ""}`}
         id="pdf-export"
@@ -6238,5 +6216,3 @@ export default function PlannerPage() {
     </main>
   );
 }
-
-// All Perfect

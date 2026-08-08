@@ -48,7 +48,6 @@ const friendlyVoiceError = (code?: string) => {
   return "Voice input failed.";
 };
 
-// --- Whisper Speaker (EXPORT THIS) ---
 export const speakWithHeart = (
   text: string,
   lang: string,
@@ -196,7 +195,6 @@ export default function RahiVoiceUI({
     try {
       recognitionRef.current?.stop();
     } catch {
-      // noop
     }
   }, []);
 
@@ -238,7 +236,6 @@ export default function RahiVoiceUI({
         window.setTimeout(() => playTone(820, 0.05, 0.04), 70);
       }
     } catch {
-      // Earcons are optional; ignore failures.
     }
   }, []);
 
@@ -390,7 +387,6 @@ export default function RahiVoiceUI({
           try {
             rec.start();
           } catch {
-            // noop, browser manages in-flight start/end.
           }
         }, 120);
       }
@@ -420,7 +416,6 @@ export default function RahiVoiceUI({
       try {
         rec.stop();
       } catch {
-        // noop
       }
       recognitionRef.current = null;
     };

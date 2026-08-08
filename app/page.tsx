@@ -187,7 +187,6 @@ export default function Home() {
     useState<CommandProfileId>("solo");
   const [commandCopied, setCommandCopied] = useState(false);
 
-  // --- AUTHENTICATION LOGIC ---
   useEffect(() => {
     let active = true;
     const loadSession = async () => {
@@ -411,7 +410,6 @@ export default function Home() {
     announce("Try saying: plan a trip, open budget, or open chat.");
   };
 
-  // --- ANIMATION VARIANTS (TS Fixed) ---
   const containerVariants: Variants = shouldReduceMotion
     ? {
         hidden: { opacity: 1 },
@@ -447,7 +445,6 @@ export default function Home() {
       
       <RahiBackground />
 
-      {/* 2. GLASS NAVBAR */}
       <nav
         className={`fixed top-0 w-full z-50 border-b border-rahi-border bg-rahi-surface backdrop-blur-xl transition-all duration-300 ${
           navCompact ? "shadow-[0_12px_30px_rgba(2,6,23,0.45)] bg-rahi-surface-strong" : ""
@@ -617,11 +614,7 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* 3. HERO SECTION */}
-      <section className="relative z-20 min-h-screen px-4 pt-20 md:pt-16 pb-10 md:pb-12 flex items-center">
-        <div className="rahi-hero-watermark" aria-hidden="true">
-          <span>RAHI.AI</span>
-        </div>
+      <section className="relative z-10 flex min-h-screen flex-col items-center justify-center px-4 pb-20 pt-28 text-center sm:px-6 md:pt-32">
         <motion.div
           variants={containerVariants}
           initial="hidden"
@@ -629,14 +622,12 @@ export default function Home() {
           className="relative z-10 w-full max-w-7xl mx-auto grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-12 items-center"
         >
           <div className="space-y-6 text-center lg:text-left">
-            {/* The "Future of Travel" Badge */}
             <motion.div variants={itemVariants} className="inline-block">
               <span className="py-1 px-4 rounded-full bg-teal-500/10 border border-teal-500/30 text-teal-300 text-xs font-bold tracking-wider uppercase backdrop-blur-md">
                 The Future of Travel
               </span>
             </motion.div>
 
-            {/* Massive Headline */}
             <motion.h1
               variants={itemVariants}
               className="text-4xl sm:text-5xl md:text-6xl xl:text-7xl font-display font-black tracking-tight leading-[0.98]"
@@ -647,7 +638,6 @@ export default function Home() {
               </span>
             </motion.h1>
 
-            {/* Subtext */}
             <motion.p
               variants={itemVariants}
               className="text-lg md:text-2xl text-gray-300 max-w-2xl mx-auto lg:mx-0 leading-relaxed"
@@ -767,7 +757,6 @@ export default function Home() {
           </motion.div>
         </motion.div>
 
-        {/* Scroll Indicator */}
         <motion.div 
           initial={shouldReduceMotion ? false : { opacity: 0 }}
           animate={shouldReduceMotion ? { opacity: 1, y: 0 } : { opacity: 1, y: [0, 10, 0] }}
@@ -785,7 +774,6 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* VOICE CONCIERGE */}
       <section id="voice" className="relative z-20 mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-20">
         <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-10 items-center">
           <div className="space-y-6">
@@ -940,7 +928,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 4. MISSION CONTROL */}
       <section id="mission-control" className="relative z-20 mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24">
         <div className="rahi-panel p-6 md:p-8 lg:p-10">
           <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/10 pb-6">
@@ -1103,7 +1090,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 5. FEATURES (Your Content) */}
       <section id="features" className="relative z-20 mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <FeatureCard 
@@ -1142,7 +1128,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 6. HOW IT WORKS */}
       <section className="relative z-20 mx-auto max-w-5xl border-t border-white/5 px-4 py-16 sm:px-6 sm:py-24">
         <SectionHeader title="How Rahi.AI Works" />
         
@@ -1160,7 +1145,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 7. BENEFITS */}
       <section className="relative z-20 mx-auto max-w-7xl border-t border-white/5 px-4 py-16 sm:px-6 sm:py-24">
          <div className="grid md:grid-cols-3 gap-8"> 
            {[
@@ -1179,7 +1163,6 @@ export default function Home() {
          </div>
       </section>
 
-      {/* 8. WHAT YOU CAN PLAN */}
       <section className="relative z-20 mx-auto max-w-7xl border-t border-white/5 px-4 py-16 sm:px-6 sm:py-24">
         <SectionHeader title="What You Can Plan with Rahi.AI" />
 
@@ -1204,7 +1187,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 9. TESTIMONIALS */}
       <section className="relative z-20 mx-auto max-w-7xl border-t border-white/5 px-4 py-16 sm:px-6 sm:py-24">
         <SectionHeader title="Loved by Travelers" />
         
@@ -1272,8 +1254,6 @@ export default function Home() {
     </main>
   );
 }
-
-// --- HELPER COMPONENTS ---
 
 function SectionHeader({ title }: { title: string }) {
   return (

@@ -55,7 +55,6 @@ Now generate the plan.
 export function postProcessItinerary(text: string, days: number) {
   if (!text) return null;
 
-  // Trim hallucinated extra days
   const parts = text.split(/Day\s\d+:/gi).filter(Boolean);
 
   const trimmed = parts.slice(0, days);
